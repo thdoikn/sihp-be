@@ -18,6 +18,10 @@ COPY . .
 # Install swag CLI tool
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
+# Install sql-migrate and build seed-admin for container init
+RUN go install github.com/rubenv/sql-migrate/...@latest
+RUN go build -o /app/bin/seed-admin ./cmd/seed-admin
+
 # Generate Swagger documentation
 RUN swag init -g cmd/main.go --output docs --parseDependency
 
@@ -29,16 +33,21 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/sihp-be -ldflags=
 FROM golang:1.25-alpine AS dev
 WORKDIR /app
 
-# Install air and git
-RUN apk add --no-cache git curl
+# Install air, git, and postgres client (pg_isready for entrypoint)
+RUN apk add --no-cache git curl postgresql-client
 RUN go install github.com/air-verse/air@latest
 
 COPY --from=builder /app /app
+COPY --from=builder /go/bin/sql-migrate /usr/local/bin/sql-migrate
+COPY --from=builder /app/bin/seed-admin /usr/local/bin/seed-admin
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port for the app
 EXPOSE 8080
 
-# Use air for live reload in dev
+# Migrate schema, seed admin, then start the app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["air", "-c", ".air.toml"]
 
 # ----------- Production Stage -----------

@@ -60,3 +60,5 @@ ehthumbs.db
 Thumbs.db
 
 /tmp/
+migration/dbconfig.runtime.yml
+./.README.md

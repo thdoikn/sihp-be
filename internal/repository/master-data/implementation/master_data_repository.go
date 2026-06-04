@@ -133,7 +133,14 @@ func (r *masterDataRepository) GetKomoditasByFilter(ctx context.Context, filter 
 			Joins("JOIN sihp.tempat_usaha tu ON tu.id = kd2.id_tempat_usaha AND tu.deleted_at IS NULL").
 			Where("tu.id_pasar = ?", *filter.IDPasar)
 	}
-	query = query.Distinct("sihp.komoditas.*")
+	query = query.Distinct(
+		"sihp.komoditas.id",
+		"sihp.komoditas.nama",
+		"sihp.komoditas.satuan",
+		"sihp.komoditas.created_at",
+		"sihp.komoditas.updated_at",
+		"sihp.komoditas.deleted_at",
+	)
 	query = entitybase.PaginateEntityQuery(query, (&entity.Komoditas{}).TableName(), (&entity.Komoditas{}).OrderMap(), &filter.PaginationFilter, &pagination)
 	if err := query.Find(&out).Error; err != nil {
 		return nil, pagination, err

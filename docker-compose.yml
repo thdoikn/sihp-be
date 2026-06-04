@@ -33,11 +33,15 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      MIGRATE_ENV: docker
     ports:
       - "8080:8080"
     volumes:
       - ./:/app  # Mount source for hot reload in dev
-    # Command is set in Dockerfile (air for dev)
+    # ENTRYPOINT runs migrations + seed-admin, then CMD starts air
     networks:
       - sihp-network
 

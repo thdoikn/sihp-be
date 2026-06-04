@@ -3,3 +3,9 @@ local:
   datasource: host=localhost dbname=sihp user=postgres password=postgres sslmode=disable port=5435
   dir: files
   table: migrations
+
+docker:
+  dialect: postgres
+  datasource: host=db dbname=sihp user=postgres password=postgres sslmode=disable port=5432
+  dir: files
+  table: migrations
