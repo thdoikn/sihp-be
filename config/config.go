@@ -30,7 +30,7 @@ type AppConfig struct {
 	ReadTimeout  int    `envconfig:"APP_READ_TIMEOUT" default:"10"`
 	WriteTimeout int    `envconfig:"APP_WRITE_TIMEOUT" default:"120"`
 	IdleTimeout  int    `envconfig:"APP_IDLE_TIMEOUT" default:"60"`
-	BodyLimit    int    `envconfig:"APP_BODY_LIMIT" default:"4"`
+	BodyLimit    int    `envconfig:"APP_BODY_LIMIT" default:"4"` // megabytes when value <= 1024
 }
 
 // DatabaseConfig holds database configuration

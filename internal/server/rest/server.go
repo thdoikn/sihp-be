@@ -40,7 +40,7 @@ func NewRestServer(ctx context.Context, cfg *config.Config) *RestServer {
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
-		BodyLimit:    cfg.BodyLimit,
+		BodyLimit:    bodyLimitBytes(cfg.BodyLimit),
 		AppName:      cfg.AppName,
 	})
 
@@ -55,6 +55,18 @@ func NewRestServer(ctx context.Context, cfg *config.Config) *RestServer {
 		db:  db,
 		ctx: ctx,
 	}
+}
+
+// bodyLimitBytes converts APP_BODY_LIMIT to bytes.
+// Values <= 1024 are treated as megabytes (e.g. 5 = 5MB).
+func bodyLimitBytes(limit int) int {
+	if limit <= 0 {
+		return 4 * 1024 * 1024
+	}
+	if limit <= 1024 {
+		return limit * 1024 * 1024
+	}
+	return limit
 }
 
 func (s *RestServer) Start() error {

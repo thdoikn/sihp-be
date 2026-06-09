@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	sihpusecase "github.com/thdoikn/sihp-be/internal/usecase/sihp"
@@ -351,6 +354,16 @@ func (h *sihpHandler) UploadKomoditasGambar(c *fiber.Ctx) error {
 	defer f.Close()
 
 	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		switch strings.ToLower(filepath.Ext(file.Filename)) {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".webp":
+			contentType = "image/webp"
+		}
+	}
 	res := h.usecase.UploadKomoditasGambar(c.Context(), parseUUIDParam(c), f, file.Size, contentType)
 	return c.Status(res.Code).JSON(res)
 }
