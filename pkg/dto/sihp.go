@@ -86,9 +86,10 @@ type ReqUpdateKomoditas struct {
 }
 
 type ResKomoditas struct {
-	ID     uuid.UUID `json:"id"`
-	Nama   string    `json:"nama"`
-	Satuan *string   `json:"satuan"`
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	Satuan    *string   `json:"satuan"`
+	GambarURL *string   `json:"gambar_url"`
 }
 
 type ResKomoditasSingle struct {

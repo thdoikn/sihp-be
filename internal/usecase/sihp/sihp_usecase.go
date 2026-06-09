@@ -2,6 +2,7 @@ package sihpusecase
 
 import (
 	"context"
+	"io"
 
 	"github.com/google/uuid"
 	"github.com/thdoikn/sihp-be/pkg/dto"
@@ -28,6 +29,7 @@ type SIHPUsecase interface {
 	GetKomoditasByID(ctx context.Context, id uuid.UUID) dto.ResKomoditasSingle
 	GetKomoditasByFilter(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList
 	UpdateKomoditas(ctx context.Context, id uuid.UUID, req *dto.ReqUpdateKomoditas) dto.ResKomoditasSingle
+	UploadKomoditasGambar(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResKomoditasSingle
 
 	CreateTempatUsaha(ctx context.Context, req *dto.ReqCreateTempatUsaha) dto.ResTempatUsahaSingle
 	GetTempatUsahaByID(ctx context.Context, id uuid.UUID) dto.ResTempatUsahaSingle

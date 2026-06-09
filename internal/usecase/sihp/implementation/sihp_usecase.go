@@ -3,6 +3,7 @@ package sihpusecaseimplementation
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/thdoikn/sihp-be/pkg/constant"
 	"github.com/thdoikn/sihp-be/pkg/dto"
 	dtobase "github.com/thdoikn/sihp-be/pkg/dto/base"
+	"github.com/thdoikn/sihp-be/pkg/storage"
+	miniostorage "github.com/thdoikn/sihp-be/pkg/storage/minio"
 	httphelper "github.com/thdoikn/sihp-be/pkg/helper/http"
 	queryhelper "github.com/thdoikn/sihp-be/pkg/helper/query"
 	"gorm.io/gorm"
@@ -31,15 +34,17 @@ type usecase struct {
 	masterDataRepo      masterdatarepository.MasterDataRepository
 	transactionDataRepo transactiondatarepository.TransactionDataRepository
 	serializer          sihpserializer.SIHPSerializer
+	storage             storage.KomoditasStorage
 	cfg                 *config.Config
 	validator           *validator.Validate
 }
 
-func NewSIHPUsecase(masterDataRepo masterdatarepository.MasterDataRepository, transactionDataRepo transactiondatarepository.TransactionDataRepository, serializer sihpserializer.SIHPSerializer, cfg *config.Config) sihpusecase.SIHPUsecase {
+func NewSIHPUsecase(masterDataRepo masterdatarepository.MasterDataRepository, transactionDataRepo transactiondatarepository.TransactionDataRepository, serializer sihpserializer.SIHPSerializer, komoditasStorage storage.KomoditasStorage, cfg *config.Config) sihpusecase.SIHPUsecase {
 	return &usecase{
 		masterDataRepo:      masterDataRepo,
 		transactionDataRepo: transactionDataRepo,
 		serializer:          serializer,
+		storage:             komoditasStorage,
 		cfg:                 cfg,
 		validator:           validator.New(validator.WithRequiredStructEnabled()),
 	}
@@ -159,6 +164,11 @@ func (u *usecase) GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, 
 				item.Satuan = val
 			}
 		}
+		if v, ok := row["gambar_url"]; ok {
+			if val, ok2 := v.(*string); ok2 {
+				item.GambarURL = val
+			}
+		}
 		if latestMap, ok := row["latest"].(map[string]any); ok {
 			if tanggal, ok2 := latestMap["tanggal"].(time.Time); ok2 {
 				item.Latest.Tanggal = &tanggal
@@ -274,6 +284,40 @@ func (u *usecase) UpdateKomoditas(ctx context.Context, id uuid.UUID, req *dto.Re
 	}
 	res := u.serializer.ToKomoditas(*obj)
 	return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusOK, "updated", nil), Data: &res}
+}
+
+const maxKomoditasImageSize = 2 * 1024 * 1024 // 2MB
+
+func (u *usecase) UploadKomoditasGambar(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResKomoditasSingle {
+	if u.storage == nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusServiceUnavailable, "storage not configured", errors.New("storage not configured"))}
+	}
+	if size <= 0 || size > maxKomoditasImageSize {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusBadRequest, "file size must be between 1 byte and 2MB", errors.New("invalid file size"))}
+	}
+
+	existing, err := u.masterDataRepo.GetKomoditasByID(ctx, id)
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusNotFound, "komoditas not found", err)}
+	}
+
+	publicURL, err := u.storage.UploadKomoditasImage(ctx, id, reader, size, contentType)
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
+	}
+
+	if existing.GambarURL != nil && *existing.GambarURL != "" {
+		oldKey := miniostorage.ObjectKeyFromURL(*existing.GambarURL, u.cfg.MinIO.PublicURL)
+		_ = u.storage.DeleteKomoditasImage(ctx, oldKey)
+	}
+
+	obj, err := u.masterDataRepo.UpdateKomoditas(ctx, id, map[string]any{"gambar_url": publicURL})
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
+	}
+
+	res := u.serializer.ToKomoditas(*obj)
+	return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusOK, "uploaded", nil), Data: &res}
 }
 
 func (u *usecase) CreateTempatUsaha(ctx context.Context, req *dto.ReqCreateTempatUsaha) dto.ResTempatUsahaSingle {

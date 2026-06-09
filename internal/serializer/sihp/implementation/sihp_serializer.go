@@ -16,7 +16,7 @@ func (s *serializer) ToPasar(in entity.Pasar) dto.ResPasar {
 	return dto.ResPasar{ID: in.ID, Nama: in.Nama, Alamat: in.Alamat, Status: int16(in.Status)}
 }
 func (s *serializer) ToKomoditas(in entity.Komoditas) dto.ResKomoditas {
-	return dto.ResKomoditas{ID: in.ID, Nama: in.Nama, Satuan: in.Satuan}
+	return dto.ResKomoditas{ID: in.ID, Nama: in.Nama, Satuan: in.Satuan, GambarURL: in.GambarURL}
 }
 func (s *serializer) ToTempatUsaha(in entity.TempatUsaha) dto.ResTempatUsaha {
 	return dto.ResTempatUsaha{ID: in.ID, IDPasar: in.IDPasar, Nama: in.Nama, Pemilik: in.Pemilik, Status: int16(in.Status)}

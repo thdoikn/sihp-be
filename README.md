@@ -70,6 +70,15 @@ Monogo is a Go-based monolithic backend that provides a RESTful API on port **80
    ```sh
    cp .env.example .env  # Edit as needed
    ```
+2. **Set up populate table:**
+```
+cd migrate
+make migrate-up env=local
+```
+2. **Set upSeed admin:**
+```
+go run ./cmd/seed-admin
+```
 3. **Build and run the app:**
    ```sh
    make start
@@ -82,11 +91,20 @@ Monogo is a Go-based monolithic backend that provides a RESTful API on port **80
 
 ### Running with Docker
 
+On container start, the app image automatically:
+
+1. Waits for PostgreSQL to be ready
+2. Runs SQL migrations (`migration/files/`)
+3. Seeds the initial admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`
+4. Starts the API (`air` in dev)
+
+Set `SKIP_DB_SETUP=true` on the `app` service to skip migrate/seed (for example when running migrations manually).
+
 1. **Start the app and database:**
    ```sh
    make start-docker
    # or
-   docker-compose up --build
+   docker compose up --build
    ```
 2. **Stop the stack:**
    ```sh
@@ -227,18 +245,20 @@ In addition to existing DB/JWT vars, set:
 - `ADMIN_PASSWORD`
 - `ADMIN_NAME` (optional, default `Administrator`)
 
-### Run SIHP migrations
+### Run SIHP migrations (local backend + Docker DB)
 
 ```sh
 cd migration
 make migrate-up env=local
 ```
 
-### Seed initial admin
+### Seed initial admin (local)
 
 ```sh
 go run ./cmd/seed-admin
 ```
+
+Docker Compose runs both steps automatically via `scripts/docker-entrypoint.sh`.
 
 ### Start server
 

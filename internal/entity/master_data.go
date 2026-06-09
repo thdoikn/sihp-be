@@ -29,8 +29,9 @@ func (p *Pasar) OrderMap() map[string]bool {
 
 type Komoditas struct {
 	entitybase.Base
-	Nama   string  `gorm:"column:nama;type:varchar(255);not null"`
-	Satuan *string `gorm:"column:satuan;type:varchar(100)"`
+	Nama      string  `gorm:"column:nama;type:varchar(255);not null"`
+	Satuan    *string `gorm:"column:satuan;type:varchar(100)"`
+	GambarURL *string `gorm:"column:gambar_url;type:text"`
 }
 
 func (k *Komoditas) TableName() string {

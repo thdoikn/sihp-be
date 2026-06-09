@@ -62,3 +62,4 @@ Thumbs.db
 /tmp/
 migration/dbconfig.runtime.yml
 ./.README.md
+.env

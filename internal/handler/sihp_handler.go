@@ -319,6 +319,42 @@ func (h *sihpHandler) UpdateKomoditas(c *fiber.Ctx) error {
 	return c.Status(res.Code).JSON(res)
 }
 
+// UploadKomoditasGambar godoc
+// @Summary Upload komoditas image
+// @Description Upload komoditas image to MinIO and save public URL
+// @Tags Komoditas
+// @Security Authorization
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path string true "Komoditas ID"
+// @Param gambar formData file true "Komoditas image (jpeg/png/webp, max 2MB)"
+// @Success 200 {object} dto.ResKomoditasSingle
+// @Router /admin/komoditas/{id}/gambar [post]
+func (h *sihpHandler) UploadKomoditasGambar(c *fiber.Ctx) error {
+	file, err := c.FormFile("gambar")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "field gambar is required",
+		})
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "failed to read uploaded file",
+		})
+	}
+	defer f.Close()
+
+	contentType := file.Header.Get("Content-Type")
+	res := h.usecase.UploadKomoditasGambar(c.Context(), parseUUIDParam(c), f, file.Size, contentType)
+	return c.Status(res.Code).JSON(res)
+}
+
 // CreateTempatUsaha godoc
 // @Summary Create tempat usaha
 // @Description Create new tempat usaha

@@ -137,6 +137,7 @@ func (r *masterDataRepository) GetKomoditasByFilter(ctx context.Context, filter 
 		"sihp.komoditas.id",
 		"sihp.komoditas.nama",
 		"sihp.komoditas.satuan",
+		"sihp.komoditas.gambar_url",
 		"sihp.komoditas.created_at",
 		"sihp.komoditas.updated_at",
 		"sihp.komoditas.deleted_at",
@@ -336,13 +337,14 @@ func (r *masterDataRepository) GetPublicTempatUsahaDetail(ctx context.Context, i
 	if filter.Name != nil {
 		query = query.Where("k.nama ILIKE ?", "%"+*filter.Name+"%")
 	}
-	query = query.Select("k.id, k.nama, k.satuan").Distinct("k.id, k.nama, k.satuan")
+	query = query.Select("k.id, k.nama, k.satuan, k.gambar_url").Distinct("k.id, k.nama, k.satuan, k.gambar_url")
 	query = entitybase.PaginateEntityQuery(query, "sihp.komoditas", (&entity.Komoditas{}).OrderMap(), &filter.PaginationFilter, &pagination)
 
 	type row struct {
-		ID     uuid.UUID
-		Nama   string
-		Satuan *string
+		ID        uuid.UUID
+		Nama      string
+		Satuan    *string
+		GambarURL *string
 	}
 	rows := []row{}
 	if err := query.Scan(&rows).Error; err != nil {
@@ -367,7 +369,7 @@ func (r *masterDataRepository) GetPublicTempatUsahaDetail(ctx context.Context, i
 			latest["tanggal"] = temp.Tanggal
 			latest["harga_rata_rata"] = temp.Harga
 		}
-		result = append(result, map[string]any{"id": item.ID, "nama": item.Nama, "satuan": item.Satuan, "latest": latest})
+		result = append(result, map[string]any{"id": item.ID, "nama": item.Nama, "satuan": item.Satuan, "gambar_url": item.GambarURL, "latest": latest})
 	}
 	return tu, pasar, result, pagination, nil
 }

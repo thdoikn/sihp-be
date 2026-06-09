@@ -20,6 +20,7 @@ import (
 	"github.com/thdoikn/sihp-be/config"
 	"github.com/thdoikn/sihp-be/internal/server/rest/router"
 	databasehelper "github.com/thdoikn/sihp-be/pkg/helper/database"
+	miniostorage "github.com/thdoikn/sihp-be/pkg/storage/minio"
 	"gorm.io/gorm"
 )
 
@@ -122,7 +123,15 @@ func (s *RestServer) Shutdown() error {
 }
 
 func (s *RestServer) RegisterRoutes() {
-	dependencies := router.NewDependencies(s.app, s.db, s.cfg)
+	komoditasStorage, err := miniostorage.NewMinIOStorage(s.cfg)
+	if err != nil {
+		log.Fatalf("failed to initialize minio storage: %v", err)
+	}
+	if err := komoditasStorage.EnsureBucket(s.ctx); err != nil {
+		log.Fatalf("failed to ensure minio bucket: %v", err)
+	}
+
+	dependencies := router.NewDependencies(s.app, s.db, s.cfg, komoditasStorage)
 	router.AuthRouter(dependencies)
 	router.PublicRouter(dependencies)
 	router.AdminRouter(dependencies)
