@@ -22,7 +22,23 @@ func (s *serializer) ToTempatUsaha(in entity.TempatUsaha) dto.ResTempatUsaha {
 	return dto.ResTempatUsaha{ID: in.ID, IDPasar: in.IDPasar, Nama: in.Nama, Pemilik: in.Pemilik, Status: int16(in.Status)}
 }
 func (s *serializer) ToKomoditasDijual(in entity.KomoditasDijual) dto.ResKomoditasDijual {
-	return dto.ResKomoditasDijual{ID: in.ID, IDTempatUsaha: in.IDTempatUsaha, IDKomoditas: in.IDKomoditas, Status: int16(in.Status)}
+	return dto.ResKomoditasDijual{
+		ID:                       in.ID,
+		IDTempatUsaha:            in.IDTempatUsaha,
+		IDKomoditas:              in.IDKomoditas,
+		HargaNormal:              in.HargaNormal,
+		HargaMahal:               in.HargaMahal,
+		HargaAvg:                 in.HargaAvg,
+		SatuanStok:               in.SatuanStok,
+		NilaiStok:                in.NilaiStok,
+		SatuanPeriode:            in.SatuanPeriode,
+		NilaiPeriode:             in.NilaiPeriode,
+		LokasiSupplier:           in.LokasiSupplier,
+		PolaDistribusi:           in.PolaDistribusi,
+		StandardizedStockPeriode: in.StandardizedStockPeriode,
+		KelasKomoditas:           in.KelasKomoditas,
+		Status:                   int16(in.Status),
+	}
 }
 func (s *serializer) ToPengumpulanData(in entity.PengumpulanData) dto.ResPengumpulanData {
 	return dto.ResPengumpulanData{ID: in.ID, IDPasar: in.IDPasar, Tanggal: in.Tanggal, Status: int16(in.Status), Catatan: in.Catatan}

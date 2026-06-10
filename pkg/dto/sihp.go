@@ -148,19 +148,50 @@ type ReqGetKomoditasDijual struct {
 }
 
 type ReqCreateKomoditasDijual struct {
-	IDTempatUsaha uuid.UUID `json:"id_tempat_usaha" validate:"required"`
-	IDKomoditas   uuid.UUID `json:"id_komoditas" validate:"required"`
+	IDTempatUsaha            uuid.UUID `json:"id_tempat_usaha" validate:"required"`
+	IDKomoditas              uuid.UUID `json:"id_komoditas" validate:"required"`
+	HargaNormal              float64   `json:"harga_normal"`
+	HargaMahal               float64   `json:"harga_mahal"`
+	SatuanStok               string    `json:"satuan_stok"`
+	NilaiStok                float64   `json:"nilai_stok"`
+	SatuanPeriode            string    `json:"satuan_periode"`
+	NilaiPeriode             int       `json:"nilai_periode"`
+	LokasiSupplier           string    `json:"lokasi_supplier"`
+	PolaDistribusi           *string   `json:"pola_distribusi"`
+	StandardizedStockPeriode *float64  `json:"standardized_stock_periode"`
+	Status                   *int16    `json:"status"`
 }
 
 type ReqUpdateKomoditasDijual struct {
-	Status *int16 `json:"status"`
+	HargaNormal              *float64 `json:"harga_normal"`
+	HargaMahal               *float64 `json:"harga_mahal"`
+	SatuanStok               *string  `json:"satuan_stok"`
+	NilaiStok                *float64 `json:"nilai_stok"`
+	SatuanPeriode            *string  `json:"satuan_periode"`
+	NilaiPeriode             *int     `json:"nilai_periode"`
+	LokasiSupplier           *string  `json:"lokasi_supplier"`
+	PolaDistribusi           *string  `json:"pola_distribusi"`
+	StandardizedStockPeriode *float64 `json:"standardized_stock_periode"`
+	KelasKomoditas           *string  `json:"kelas_komoditas"`
+	Status                   *int16   `json:"status"`
 }
 
 type ResKomoditasDijual struct {
-	ID            uuid.UUID `json:"id"`
-	IDTempatUsaha uuid.UUID `json:"id_tempat_usaha"`
-	IDKomoditas   uuid.UUID `json:"id_komoditas"`
-	Status        int16     `json:"status"`
+	ID                       uuid.UUID `json:"id"`
+	IDTempatUsaha            uuid.UUID `json:"id_tempat_usaha"`
+	IDKomoditas              uuid.UUID `json:"id_komoditas"`
+	HargaNormal              float64   `json:"harga_normal"`
+	HargaMahal               float64   `json:"harga_mahal"`
+	HargaAvg                 *float64  `json:"harga_avg,omitempty"`
+	SatuanStok               string    `json:"satuan_stok"`
+	NilaiStok                float64   `json:"nilai_stok"`
+	SatuanPeriode            string    `json:"satuan_periode"`
+	NilaiPeriode             int       `json:"nilai_periode"`
+	LokasiSupplier           string    `json:"lokasi_supplier"`
+	PolaDistribusi           *string   `json:"pola_distribusi,omitempty"`
+	StandardizedStockPeriode float64   `json:"standardized_stock_periode"`
+	KelasKomoditas           *string   `json:"kelas_komoditas,omitempty"`
+	Status                   int16     `json:"status"`
 }
 
 type ResKomoditasDijualSingle struct {
