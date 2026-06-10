@@ -381,11 +381,49 @@ func (u *usecase) DeleteTempatUsaha(ctx context.Context, id uuid.UUID) dtobase.B
 	return u.baseRes(http.StatusOK, "deleted", nil)
 }
 
+func komoditasDijualFromCreateReq(req *dto.ReqCreateKomoditasDijual) entity.KomoditasDijual {
+	satuanStok := req.SatuanStok
+	if satuanStok == "" {
+		satuanStok = "kg"
+	}
+	satuanPeriode := req.SatuanPeriode
+	if satuanPeriode == "" {
+		satuanPeriode = "minggu"
+	}
+	nilaiPeriode := req.NilaiPeriode
+	if nilaiPeriode <= 0 {
+		nilaiPeriode = 1
+	}
+	var standardized float64
+	if req.StandardizedStockPeriode != nil {
+		standardized = *req.StandardizedStockPeriode
+	}
+	status := constant.StatusActive
+	if req.Status != nil {
+		status = constant.ActiveInactiveStatus(*req.Status)
+	}
+	return entity.KomoditasDijual{
+		IDTempatUsaha:            req.IDTempatUsaha,
+		IDKomoditas:              req.IDKomoditas,
+		HargaNormal:              req.HargaNormal,
+		HargaMahal:               req.HargaMahal,
+		SatuanStok:               satuanStok,
+		NilaiStok:                req.NilaiStok,
+		SatuanPeriode:            satuanPeriode,
+		NilaiPeriode:             nilaiPeriode,
+		LokasiSupplier:           req.LokasiSupplier,
+		PolaDistribusi:           req.PolaDistribusi,
+		StandardizedStockPeriode: standardized,
+		Status:                   status,
+	}
+}
+
 func (u *usecase) CreateKomoditasDijual(ctx context.Context, req *dto.ReqCreateKomoditasDijual) dto.ResKomoditasDijualSingle {
 	if err := u.validator.Struct(req); err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
-	obj, err := u.masterDataRepo.CreateKomoditasDijual(ctx, &entity.KomoditasDijual{IDTempatUsaha: req.IDTempatUsaha, IDKomoditas: req.IDKomoditas, Status: constant.StatusActive})
+	input := komoditasDijualFromCreateReq(req)
+	obj, err := u.masterDataRepo.CreateKomoditasDijual(ctx, &input)
 	if err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
@@ -421,10 +459,47 @@ func (u *usecase) GetKomoditasDijualByFilter(ctx context.Context, req *dto.ReqGe
 }
 
 func (u *usecase) UpdateKomoditasDijual(ctx context.Context, id uuid.UUID, req *dto.ReqUpdateKomoditasDijual) dto.ResKomoditasDijualSingle {
+	_, err := u.masterDataRepo.GetKomoditasDijualByID(ctx, id)
+	if err != nil {
+		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusNotFound, "not found", err)}
+	}
+
 	update := map[string]any{}
+	if req.HargaNormal != nil {
+		update["harga_normal"] = *req.HargaNormal
+	}
+	if req.HargaMahal != nil {
+		update["harga_mahal"] = *req.HargaMahal
+	}
+	if req.SatuanStok != nil {
+		update["satuan_stok"] = *req.SatuanStok
+	}
+	if req.NilaiStok != nil {
+		update["nilai_stok"] = *req.NilaiStok
+	}
+	if req.SatuanPeriode != nil {
+		update["satuan_periode"] = *req.SatuanPeriode
+	}
+	if req.NilaiPeriode != nil {
+		update["nilai_periode"] = *req.NilaiPeriode
+	}
+	if req.LokasiSupplier != nil {
+		update["lokasi_supplier"] = *req.LokasiSupplier
+	}
+	if req.PolaDistribusi != nil {
+		update["pola_distribusi"] = req.PolaDistribusi
+	}
+	if req.KelasKomoditas != nil {
+		update["kelas_komoditas"] = req.KelasKomoditas
+	}
 	if req.Status != nil {
 		update["status"] = *req.Status
 	}
+
+	if req.StandardizedStockPeriode != nil {
+		update["standardized_stock_periode"] = *req.StandardizedStockPeriode
+	}
+
 	obj, err := u.masterDataRepo.UpdateKomoditasDijual(ctx, id, update)
 	if err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}

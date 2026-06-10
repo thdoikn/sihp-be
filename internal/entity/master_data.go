@@ -68,9 +68,20 @@ func (t *TempatUsaha) OrderMap() map[string]bool {
 
 type KomoditasDijual struct {
 	entitybase.Base
-	IDTempatUsaha uuid.UUID                     `gorm:"column:id_tempat_usaha;type:uuid;not null"`
-	IDKomoditas   uuid.UUID                     `gorm:"column:id_komoditas;type:uuid;not null"`
-	Status        constant.ActiveInactiveStatus `gorm:"column:status;type:smallint;not null;default:1"`
+	IDTempatUsaha            uuid.UUID                     `gorm:"column:id_tempat_usaha;type:uuid;not null"`
+	IDKomoditas              uuid.UUID                     `gorm:"column:id_komoditas;type:uuid;not null"`
+	HargaNormal              float64                       `gorm:"column:harga_normal;type:double precision;not null;default:0"`
+	HargaMahal               float64                       `gorm:"column:harga_mahal;type:double precision;not null;default:0"`
+	HargaAvg                 *float64                      `gorm:"column:harga_avg;type:double precision;->"`
+	SatuanStok               string                        `gorm:"column:satuan_stok;type:sihp.satuan_stok_enum;not null;default:'kg'"`
+	NilaiStok                float64                       `gorm:"column:nilai_stok;type:numeric(18,4);not null;default:0"`
+	SatuanPeriode            string                        `gorm:"column:satuan_periode;type:sihp.satuan_periode_enum;not null;default:'minggu'"`
+	NilaiPeriode             int                           `gorm:"column:nilai_periode;type:integer;not null;default:1"`
+	LokasiSupplier           string                        `gorm:"column:lokasi_supplier;type:varchar(255);not null;default:''"`
+	PolaDistribusi           *string                       `gorm:"column:pola_distribusi;type:varchar(50)"`
+	StandardizedStockPeriode float64                       `gorm:"column:standardized_stock_periode;type:numeric(18,4);not null;default:0"`
+	KelasKomoditas           *string                       `gorm:"column:kelas_komoditas;type:sihp.kelas_komoditas_enum"`
+	Status                   constant.ActiveInactiveStatus `gorm:"column:status;type:smallint;not null;default:1"`
 
 	// Relation
 	Komoditas   Komoditas   `gorm:"foreignKey:IDKomoditas;references:ID"`
