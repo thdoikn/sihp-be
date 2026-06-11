@@ -95,6 +95,31 @@ func (s *minioStorage) UploadKomoditasImage(ctx context.Context, komoditasID uui
 }
 
 func (s *minioStorage) DeleteKomoditasImage(ctx context.Context, objectKey string) error {
+	return s.deleteObject(ctx, objectKey)
+}
+
+func (s *minioStorage) UploadPengumpulanSignature(ctx context.Context, pengumpulanDataID uuid.UUID, reader io.Reader, size int64, contentType string) (string, error) {
+	ext, ok := allowedContentTypes[contentType]
+	if !ok {
+		return "", fmt.Errorf("unsupported content type: %s", contentType)
+	}
+
+	objectKey := "signatures/" + pengumpulanDataID.String() + ext
+	_, err := s.client.PutObject(ctx, s.bucket, objectKey, reader, size, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", fmt.Errorf("upload object: %w", err)
+	}
+
+	return s.objectURL(objectKey), nil
+}
+
+func (s *minioStorage) DeletePengumpulanSignature(ctx context.Context, objectKey string) error {
+	return s.deleteObject(ctx, objectKey)
+}
+
+func (s *minioStorage) deleteObject(ctx context.Context, objectKey string) error {
 	if objectKey == "" {
 		return nil
 	}

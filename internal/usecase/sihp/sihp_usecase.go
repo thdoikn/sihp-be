@@ -49,6 +49,7 @@ type SIHPUsecase interface {
 	UpdatePengumpulanData(ctx context.Context, id uuid.UUID, req *dto.ReqUpdatePengumpulanData) dto.ResPengumpulanDataSingle
 	DeletePengumpulanData(ctx context.Context, id uuid.UUID) dtobase.BaseRes
 	FinalizePengumpulanData(ctx context.Context, id uuid.UUID) dto.ResFinalizePengumpulanDataEnvelope
+	UploadPengumpulanTandaTangan(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResPengumpulanDataSingle
 
 	CreateHargaRutin(ctx context.Context, req *dto.ReqCreateHargaRutin) dto.ResHargaRutinSingle
 	GetHargaRutinByID(ctx context.Context, id uuid.UUID) dto.ResHargaRutinSingle

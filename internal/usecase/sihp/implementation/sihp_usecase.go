@@ -2,9 +2,11 @@ package sihpusecaseimplementation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -599,6 +601,68 @@ func (u *usecase) FinalizePengumpulanData(ctx context.Context, id uuid.UUID) dto
 		return dto.ResFinalizePengumpulanDataEnvelope{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
 	return dto.ResFinalizePengumpulanDataEnvelope{BaseRes: u.baseRes(http.StatusOK, "finalized", nil), Data: &dto.ResFinalizePengumpulanData{FinalizedKomoditasCount: count}}
+}
+
+type pengumpulanCatatanMeta struct {
+	Enumerator   string `json:"enumerator"`
+	SignatureURL string `json:"signature_url,omitempty"`
+}
+
+func parsePengumpulanCatatan(catatan *string) pengumpulanCatatanMeta {
+	if catatan == nil || strings.TrimSpace(*catatan) == "" {
+		return pengumpulanCatatanMeta{}
+	}
+	var meta pengumpulanCatatanMeta
+	if err := json.Unmarshal([]byte(*catatan), &meta); err == nil && meta.Enumerator != "" {
+		return meta
+	}
+	return pengumpulanCatatanMeta{Enumerator: strings.TrimSpace(*catatan)}
+}
+
+func encodePengumpulanCatatan(meta pengumpulanCatatanMeta) string {
+	b, _ := json.Marshal(meta)
+	return string(b)
+}
+
+const maxSignatureSize = 512 * 1024 // 512KB
+
+func (u *usecase) UploadPengumpulanTandaTangan(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResPengumpulanDataSingle {
+	if u.storage == nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusServiceUnavailable, "storage not configured", errors.New("storage not configured"))}
+	}
+	if size <= 0 || size > maxSignatureSize {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, "file size must be between 1 byte and 512KB", errors.New("invalid file size"))}
+	}
+
+	existing, err := u.transactionDataRepo.GetPengumpulanDataByID(ctx, id)
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusNotFound, "not found", err)}
+	}
+	if existing.Status != constant.PengumpulanDataDraft {
+		e := errors.New("only draft can be updated")
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, e.Error(), e)}
+	}
+
+	meta := parsePengumpulanCatatan(existing.Catatan)
+	publicURL, err := u.storage.UploadPengumpulanSignature(ctx, id, reader, size, contentType)
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
+	}
+
+	if meta.SignatureURL != "" {
+		oldKey := miniostorage.ObjectKeyFromURL(meta.SignatureURL, u.cfg.MinIO.PublicURL)
+		_ = u.storage.DeletePengumpulanSignature(ctx, oldKey)
+	}
+
+	meta.SignatureURL = publicURL
+	catatan := encodePengumpulanCatatan(meta)
+	obj, err := u.transactionDataRepo.UpdatePengumpulanData(ctx, id, map[string]any{"catatan": catatan})
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
+	}
+
+	res := u.serializer.ToPengumpulanData(*obj)
+	return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusOK, "uploaded", nil), Data: &res}
 }
 
 func (u *usecase) ensureHargaRutinDraft(ctx context.Context, idPengumpulanData uuid.UUID) error {
