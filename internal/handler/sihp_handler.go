@@ -638,6 +638,52 @@ func (h *sihpHandler) FinalizePengumpulanData(c *fiber.Ctx) error {
 	return c.Status(res.Code).JSON(res)
 }
 
+// UploadPengumpulanTandaTangan godoc
+// @Summary Upload pengumpulan signature
+// @Description Upload enumerator signature image to MinIO and save URL in catatan
+// @Tags Pengumpulan Data
+// @Security Authorization
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path string true "Pengumpulan data ID"
+// @Param tanda_tangan formData file true "Signature image (jpeg/png/webp, max 512KB)"
+// @Success 200 {object} dto.ResPengumpulanDataSingle
+// @Router /admin/pengumpulan-data/{id}/tanda-tangan [post]
+func (h *sihpHandler) UploadPengumpulanTandaTangan(c *fiber.Ctx) error {
+	file, err := c.FormFile("tanda_tangan")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "field tanda_tangan is required",
+		})
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "failed to read uploaded file",
+		})
+	}
+	defer f.Close()
+
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		switch strings.ToLower(filepath.Ext(file.Filename)) {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".webp":
+			contentType = "image/webp"
+		}
+	}
+	res := h.usecase.UploadPengumpulanTandaTangan(c.Context(), parseUUIDParam(c), f, file.Size, contentType)
+	return c.Status(res.Code).JSON(res)
+}
+
 // CreateHargaRutin godoc
 // @Summary Create harga rutin
 // @Description Create harga rutin row for draft batch

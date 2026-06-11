@@ -53,6 +53,7 @@ func AdminRouter(deps *Dependencies) {
 	pd.Put("/:id", h.UpdatePengumpulanData)
 	pd.Delete("/:id", h.DeletePengumpulanData)
 	pd.Post("/:id/finalize", h.FinalizePengumpulanData)
+	pd.Post("/:id/tanda-tangan", h.UploadPengumpulanTandaTangan)
 
 	hr := protected.Group("/harga-rutin")
 	hr.Post("/", h.CreateHargaRutin)
