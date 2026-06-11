@@ -300,11 +300,13 @@ type ReqGetHargaPelaporan struct {
 }
 
 type ResHargaPelaporan struct {
-	ID                uuid.UUID `json:"id"`
-	IDPengumpulanData uuid.UUID `json:"id_pengumpulan_data"`
-	IDKomoditas       uuid.UUID `json:"id_komoditas"`
-	Tanggal           time.Time `json:"tanggal"`
-	Harga             int64     `json:"harga"`
+	ID            uuid.UUID `json:"id"`
+	Tanggal       time.Time `json:"tanggal"`
+	IDPasar       uuid.UUID `json:"pasar_id"`
+	IDKomoditas   uuid.UUID `json:"komoditas_id"`
+	HargaBesar    *int64    `json:"harga_besar,omitempty"`
+	HargaMenengah *int64    `json:"harga_menengah,omitempty"`
+	HargaKecil    *int64    `json:"harga_kecil,omitempty"`
 }
 
 type ResHargaPelaporanSingle struct {

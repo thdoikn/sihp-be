@@ -189,7 +189,7 @@ func (r *transactionDatarepository) DeleteHargaRutin(ctx context.Context, id uui
 	return r.db.WithContext(ctx).Table(r.hargaRutin.TableName()).Delete(&entity.HargaRutin{}, "id = ?", id).Error
 }
 
-func (r *transactionDatarepository) GetHargaPelaporanByID(ctx context.Context, id uuid.UUID) (*entity.HargaPelaporan, error) {
+func (r *transactionDatarepository) GetHargaPelaporanByID(ctx context.Context, id uuid.UUID) (*entity.HargaPelaporanEnriched, error) {
 	if r.db == nil {
 		return nil, errors.New("database connection is not initialized")
 	}
@@ -197,35 +197,117 @@ func (r *transactionDatarepository) GetHargaPelaporanByID(ctx context.Context, i
 	if err := r.db.WithContext(ctx).Table(r.hargaPelaporan.TableName()).First(&out, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
-	return &out, nil
+	enriched, err := r.enrichHargaPelaporan(ctx, []entity.HargaPelaporan{out})
+	if err != nil {
+		return nil, err
+	}
+	if len(enriched) == 0 {
+		return nil, errors.New("harga pelaporan not found")
+	}
+	return &enriched[0], nil
 }
-func (r *transactionDatarepository) GetHargaPelaporanByFilter(ctx context.Context, filter *entity.HargaPelaporanFilter) ([]entity.HargaPelaporan, entitybase.BasePaginationResult, error) {
+
+func (r *transactionDatarepository) GetHargaPelaporanByFilter(ctx context.Context, filter *entity.HargaPelaporanFilter) ([]entity.HargaPelaporanEnriched, entitybase.BasePaginationResult, error) {
 	if r.db == nil {
 		return nil, entitybase.BasePaginationResult{}, errors.New("database connection is not initialized")
 	}
 	var out []entity.HargaPelaporan
 	var pagination entitybase.BasePaginationResult
-	query := r.db.WithContext(ctx).Table(r.hargaPelaporan.TableName()).
-		Joins("JOIN sihp.pengumpulan_data pd ON pd.id = sihp.harga_pelaporan.id_pengumpulan_data AND pd.deleted_at IS NULL")
-	if filter.IDPasar != nil {
-		query = query.Where("pd.id_pasar = ?", *filter.IDPasar)
+	tableName := r.hargaPelaporan.TableName()
+	query := r.db.WithContext(ctx).Table(tableName)
+
+	if filter.IDPasar != nil || filter.Status != nil {
+		sub := r.db.Table(r.pengumpulanData.TableName()).Select("id").Where("deleted_at IS NULL")
+		if filter.IDPasar != nil {
+			sub = sub.Where("id_pasar = ?", *filter.IDPasar)
+		}
+		if filter.Status != nil {
+			sub = sub.Where("status = ?", *filter.Status)
+		}
+		query = query.Where("id_pengumpulan_data IN (?)", sub)
 	}
 	if filter.IDKomoditas != nil {
-		query = query.Where("sihp.harga_pelaporan.id_komoditas = ?", *filter.IDKomoditas)
+		query = query.Where("id_komoditas = ?", *filter.IDKomoditas)
 	}
 	if filter.From != nil {
-		query = query.Where("sihp.harga_pelaporan.tanggal >= ?", filter.From.Format("2006-01-02"))
+		query = query.Where("tanggal >= ?", filter.From.Format("2006-01-02"))
 	}
 	if filter.To != nil {
-		query = query.Where("sihp.harga_pelaporan.tanggal <= ?", filter.To.Format("2006-01-02"))
+		query = query.Where("tanggal <= ?", filter.To.Format("2006-01-02"))
 	}
-	if filter.Status != nil {
-		query = query.Where("pd.status = ?", *filter.Status)
-	}
-	query = query.Select("sihp.harga_pelaporan.*")
-	query = entitybase.PaginateEntityQuery(query, (&entity.HargaPelaporan{}).TableName(), (&entity.HargaPelaporan{}).OrderMap(), &filter.PaginationFilter, &pagination)
+	query = entitybase.PaginateEntityQuery(query, tableName, (&entity.HargaPelaporan{}).OrderMap(), &filter.PaginationFilter, &pagination)
 	if err := query.Find(&out).Error; err != nil {
 		return nil, pagination, err
 	}
-	return out, pagination, nil
+	enriched, err := r.enrichHargaPelaporan(ctx, out)
+	if err != nil {
+		return nil, pagination, err
+	}
+	return enriched, pagination, nil
+}
+
+func (r *transactionDatarepository) enrichHargaPelaporan(ctx context.Context, rows []entity.HargaPelaporan) ([]entity.HargaPelaporanEnriched, error) {
+	if len(rows) == 0 {
+		return []entity.HargaPelaporanEnriched{}, nil
+	}
+
+	pengumpulanIDs := make([]uuid.UUID, 0, len(rows))
+	seenPengumpulan := make(map[uuid.UUID]struct{}, len(rows))
+	for _, row := range rows {
+		if _, ok := seenPengumpulan[row.IDPengumpulanData]; ok {
+			continue
+		}
+		seenPengumpulan[row.IDPengumpulanData] = struct{}{}
+		pengumpulanIDs = append(pengumpulanIDs, row.IDPengumpulanData)
+	}
+
+	var pengumpulanRows []entity.PengumpulanData
+	if err := r.db.WithContext(ctx).
+		Table(r.pengumpulanData.TableName()).
+		Where("id IN ?", pengumpulanIDs).
+		Find(&pengumpulanRows).Error; err != nil {
+		return nil, err
+	}
+	pasarByPengumpulan := make(map[uuid.UUID]uuid.UUID, len(pengumpulanRows))
+	for _, pd := range pengumpulanRows {
+		pasarByPengumpulan[pd.ID] = pd.IDPasar
+	}
+
+	var rutinRows []entity.HargaRutin
+	if err := r.db.WithContext(ctx).
+		Table(r.hargaRutin.TableName()).
+		Where("id_pengumpulan_data IN ?", pengumpulanIDs).
+		Find(&rutinRows).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]entity.HargaPelaporanEnriched, 0, len(rows))
+	for _, row := range rows {
+		item := entity.HargaPelaporanEnriched{
+			HargaPelaporan: row,
+			IDPasar:        pasarByPengumpulan[row.IDPengumpulanData],
+		}
+		for _, rutin := range rutinRows {
+			if rutin.IDPengumpulanData != row.IDPengumpulanData || rutin.IDKomoditas != row.IDKomoditas {
+				continue
+			}
+			harga := rutin.Harga
+			switch rutin.KelasKomoditas {
+			case "besar":
+				if item.HargaBesar == nil {
+					item.HargaBesar = &harga
+				}
+			case "menengah":
+				if item.HargaMenengah == nil {
+					item.HargaMenengah = &harga
+				}
+			case "kecil":
+				if item.HargaKecil == nil {
+					item.HargaKecil = &harga
+				}
+			}
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }

@@ -22,6 +22,6 @@ type TransactionDataRepository interface {
 	UpdateHargaRutin(ctx context.Context, id uuid.UUID, updateMap map[string]any) (*entity.HargaRutin, error)
 	DeleteHargaRutin(ctx context.Context, id uuid.UUID) error
 
-	GetHargaPelaporanByID(ctx context.Context, id uuid.UUID) (*entity.HargaPelaporan, error)
-	GetHargaPelaporanByFilter(ctx context.Context, filter *entity.HargaPelaporanFilter) ([]entity.HargaPelaporan, entitybase.BasePaginationResult, error)
+	GetHargaPelaporanByID(ctx context.Context, id uuid.UUID) (*entity.HargaPelaporanEnriched, error)
+	GetHargaPelaporanByFilter(ctx context.Context, filter *entity.HargaPelaporanFilter) ([]entity.HargaPelaporanEnriched, entitybase.BasePaginationResult, error)
 }
