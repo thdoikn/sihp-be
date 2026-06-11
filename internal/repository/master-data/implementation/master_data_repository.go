@@ -267,18 +267,167 @@ func (r *masterDataRepository) UpdateKomoditasDijual(ctx context.Context, id uui
 	return r.GetKomoditasDijualByID(ctx, id)
 }
 
-func (r *masterDataRepository) GetPublicKomoditasStats(ctx context.Context, komoditasID uuid.UUID, days int, idPasar *uuid.UUID) (*time.Time, *float64, *float64, *float64, *float64, error) {
-	base := r.db.WithContext(ctx).Table("sihp.harga_pelaporan hp").
+func (r *masterDataRepository) GetPublicKomoditasList(ctx context.Context, filter *entity.PublicKomoditasListFilter) ([]entity.PublicKomoditasListItem, entitybase.BasePaginationResult, error) {
+	if r.db == nil {
+		return nil, entitybase.BasePaginationResult{}, errors.New("database connection is not initialized")
+	}
+	if filter == nil {
+		return nil, entitybase.BasePaginationResult{}, errors.New("filter is required")
+	}
+
+	var baseSQL string
+	var args []any
+
+	switch {
+	case filter.IDTempatUsaha != nil:
+		baseSQL = `
+SELECT k.id, k.nama, k.satuan, k.gambar_url,
+  lat.harga_terbaru, agg.harga_terkecil, agg.harga_terbesar, agg.harga_avg, lat.tanggal_terbaru
+FROM sihp.komoditas k
+INNER JOIN sihp.komoditas_dijual kd ON kd.id_komoditas = k.id AND kd.deleted_at IS NULL AND kd.id_tempat_usaha = ?
+LEFT JOIN (
+  SELECT hr.id_komoditas,
+    AVG(hr.harga)::float8 AS harga_terbaru,
+    MAX(pd.tanggal) AS tanggal_terbaru
+  FROM sihp.harga_rutin hr
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hr.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+  WHERE hr.id_tempat_usaha = ?
+    AND pd.tanggal = (
+      SELECT MAX(pd2.tanggal)
+      FROM sihp.pengumpulan_data pd2
+      INNER JOIN sihp.harga_rutin hr2 ON hr2.id_pengumpulan_data = pd2.id AND hr2.id_tempat_usaha = ?
+      WHERE hr2.id_komoditas = hr.id_komoditas AND pd2.deleted_at IS NULL AND pd2.status = ?
+    )
+  GROUP BY hr.id_komoditas
+) lat ON lat.id_komoditas = k.id
+LEFT JOIN (
+  SELECT hr.id_komoditas,
+    MIN(hr.harga)::float8 AS harga_terkecil,
+    MAX(hr.harga)::float8 AS harga_terbesar,
+    AVG(hr.harga)::float8 AS harga_avg
+  FROM sihp.harga_rutin hr
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hr.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+  WHERE hr.id_tempat_usaha = ?
+  GROUP BY hr.id_komoditas
+) agg ON agg.id_komoditas = k.id
+WHERE k.deleted_at IS NULL`
+		args = []any{
+			*filter.IDTempatUsaha,
+			constant.PengumpulanDataFinal, *filter.IDTempatUsaha,
+			*filter.IDTempatUsaha, constant.PengumpulanDataFinal,
+			constant.PengumpulanDataFinal, *filter.IDTempatUsaha,
+		}
+	case filter.IDPasar != nil:
+		baseSQL = `
+SELECT k.id, k.nama, k.satuan, k.gambar_url,
+  lat.harga_terbaru, agg.harga_terkecil, agg.harga_terbesar, agg.harga_avg, lat.tanggal_terbaru
+FROM sihp.komoditas k
+INNER JOIN (
+  SELECT DISTINCT ON (hp.id_komoditas)
+    hp.id_komoditas, hp.harga::float8 AS harga_terbaru, hp.tanggal AS tanggal_terbaru
+  FROM sihp.harga_pelaporan hp
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ? AND pd.id_pasar = ?
+  ORDER BY hp.id_komoditas, hp.tanggal DESC, hp.created_at DESC
+) lat ON lat.id_komoditas = k.id
+INNER JOIN (
+  SELECT hp.id_komoditas,
+    MIN(hp.harga)::float8 AS harga_terkecil,
+    MAX(hp.harga)::float8 AS harga_terbesar,
+    AVG(hp.harga)::float8 AS harga_avg
+  FROM sihp.harga_pelaporan hp
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ? AND pd.id_pasar = ?
+  GROUP BY hp.id_komoditas
+) agg ON agg.id_komoditas = k.id
+WHERE k.deleted_at IS NULL`
+		args = []any{constant.PengumpulanDataFinal, *filter.IDPasar, constant.PengumpulanDataFinal, *filter.IDPasar}
+	default:
+		baseSQL = `
+SELECT k.id, k.nama, k.satuan, k.gambar_url,
+  lat.harga_terbaru, agg.harga_terkecil, agg.harga_terbesar, agg.harga_avg, lat.tanggal_terbaru
+FROM sihp.komoditas k
+LEFT JOIN (
+  SELECT DISTINCT ON (hp.id_komoditas)
+    hp.id_komoditas, hp.harga::float8 AS harga_terbaru, hp.tanggal AS tanggal_terbaru
+  FROM sihp.harga_pelaporan hp
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+  ORDER BY hp.id_komoditas, hp.tanggal DESC, hp.created_at DESC
+) lat ON lat.id_komoditas = k.id
+LEFT JOIN (
+  SELECT hp.id_komoditas,
+    MIN(hp.harga)::float8 AS harga_terkecil,
+    MAX(hp.harga)::float8 AS harga_terbesar,
+    AVG(hp.harga)::float8 AS harga_avg
+  FROM sihp.harga_pelaporan hp
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+  GROUP BY hp.id_komoditas
+) agg ON agg.id_komoditas = k.id
+WHERE k.deleted_at IS NULL`
+		args = []any{constant.PengumpulanDataFinal, constant.PengumpulanDataFinal}
+	}
+
+	if filter.Nama != nil && *filter.Nama != "" {
+		baseSQL += " AND k.nama ILIKE ?"
+		args = append(args, "%"+*filter.Nama+"%")
+	}
+
+	countSQL := "SELECT COUNT(*) FROM (" + baseSQL + ") counted"
+	var total int64
+	if err := r.db.WithContext(ctx).Raw(countSQL, args...).Scan(&total).Error; err != nil {
+		return nil, entitybase.BasePaginationResult{}, err
+	}
+
+	limit := 10
+	if filter.PaginationFilter.Limit != nil && *filter.PaginationFilter.Limit > 0 {
+		limit = *filter.PaginationFilter.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	offset := 0
+	if filter.PaginationFilter.Offset != nil && *filter.PaginationFilter.Offset > 0 {
+		offset = *filter.PaginationFilter.Offset
+	}
+
+	listSQL := baseSQL + " ORDER BY k.nama ASC LIMIT ? OFFSET ?"
+	listArgs := append(append([]any{}, args...), limit, offset)
+
+	rows := []entity.PublicKomoditasListItem{}
+	if err := r.db.WithContext(ctx).Raw(listSQL, listArgs...).Scan(&rows).Error; err != nil {
+		return nil, entitybase.BasePaginationResult{}, err
+	}
+
+	return rows, entitybase.BasePaginationResult{
+		Offset:  offset,
+		Limit:   limit,
+		Count:   int(total),
+		OrderBy: "nama asc",
+	}, nil
+}
+
+func (r *masterDataRepository) publicHargaPelaporanQuery(
+	ctx context.Context,
+	komoditasID uuid.UUID,
+	idPasar *uuid.UUID,
+) *gorm.DB {
+	query := r.db.WithContext(ctx).Table("sihp.harga_pelaporan hp").
 		Joins("JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL").
 		Where("hp.id_komoditas = ? AND pd.status = ?", komoditasID, constant.PengumpulanDataFinal)
 	if idPasar != nil {
-		base = base.Where("pd.id_pasar = ?", *idPasar)
+		query = query.Where("pd.id_pasar = ?", *idPasar)
 	}
+	return query
+}
+
+func (r *masterDataRepository) GetPublicKomoditasStats(ctx context.Context, komoditasID uuid.UUID, days int, idPasar *uuid.UUID) (*time.Time, *float64, *float64, *float64, *float64, error) {
 	var latest struct {
 		Tanggal time.Time
 		Harga   float64
 	}
-	if err := base.Select("hp.tanggal, hp.harga::float8 as harga").Order("hp.tanggal desc").Limit(1).Scan(&latest).Error; err != nil {
+	if err := r.publicHargaPelaporanQuery(ctx, komoditasID, idPasar).
+		Select("hp.tanggal, hp.harga::float8 as harga").
+		Order("hp.tanggal desc").
+		Limit(1).
+		Scan(&latest).Error; err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 	var latestTanggal *time.Time
@@ -290,7 +439,10 @@ func (r *masterDataRepository) GetPublicKomoditasStats(ctx context.Context, komo
 
 	from := time.Now().AddDate(0, 0, -days)
 	stats := struct{ Avg, Min, Max *float64 }{}
-	if err := base.Select("AVG(hp.harga)::float8 as avg, MIN(hp.harga)::float8 as min, MAX(hp.harga)::float8 as max").Where("hp.tanggal >= ?", from.Format("2006-01-02")).Scan(&stats).Error; err != nil {
+	if err := r.publicHargaPelaporanQuery(ctx, komoditasID, idPasar).
+		Where("hp.tanggal >= ?", from.Format("2006-01-02")).
+		Select("AVG(hp.harga)::float8 as avg, MIN(hp.harga)::float8 as min, MAX(hp.harga)::float8 as max").
+		Scan(&stats).Error; err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 	return latestTanggal, latestHarga, stats.Avg, stats.Min, stats.Max, nil
@@ -307,6 +459,94 @@ func (r *masterDataRepository) GetPublicKomoditasTrend(ctx context.Context, komo
 	out := []map[string]any{}
 	err := query.Select("hp.tanggal as tanggal, AVG(hp.harga)::float8 as harga_rata_rata").Group("hp.tanggal").Order("hp.tanggal asc").Scan(&out).Error
 	return out, err
+}
+
+func (r *masterDataRepository) GetPublicPasarList(ctx context.Context) ([]entity.PublicPasarListItem, error) {
+	if r.db == nil {
+		return nil, errors.New("database connection is not initialized")
+	}
+
+	const sql = `
+SELECT p.id, p.nama, p.alamat, p.status, p.longitude, p.latitude,
+  COALESCE(tu_count.cnt, 0) AS total_tempat_usaha,
+  COALESCE(kom_count.cnt, 0) AS total_komoditas
+FROM sihp.pasar p
+LEFT JOIN (
+  SELECT id_pasar, COUNT(*) AS cnt
+  FROM sihp.tempat_usaha
+  WHERE deleted_at IS NULL AND status = ?
+  GROUP BY id_pasar
+) tu_count ON tu_count.id_pasar = p.id
+LEFT JOIN (
+  SELECT pd.id_pasar, COUNT(DISTINCT hp.id_komoditas) AS cnt
+  FROM sihp.harga_pelaporan hp
+  INNER JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+  GROUP BY pd.id_pasar
+) kom_count ON kom_count.id_pasar = p.id
+WHERE p.deleted_at IS NULL AND p.status = ?
+ORDER BY p.nama ASC`
+
+	rows := []entity.PublicPasarListItem{}
+	err := r.db.WithContext(ctx).Raw(sql, constant.StatusActive, constant.PengumpulanDataFinal, constant.StatusActive).Scan(&rows).Error
+	return rows, err
+}
+
+func (r *masterDataRepository) GetPublicTempatUsahaList(ctx context.Context, filter *entity.PublicTempatUsahaListFilter) ([]entity.PublicTempatUsahaListItem, entitybase.BasePaginationResult, error) {
+	if r.db == nil {
+		return nil, entitybase.BasePaginationResult{}, errors.New("database connection is not initialized")
+	}
+	if filter == nil {
+		return nil, entitybase.BasePaginationResult{}, errors.New("filter is required")
+	}
+
+	baseSQL := `
+SELECT tu.id, tu.nama, tu.id_pasar AS pasar_id, p.nama AS pasar_nama
+FROM sihp.tempat_usaha tu
+INNER JOIN sihp.pasar p ON p.id = tu.id_pasar AND p.deleted_at IS NULL
+WHERE tu.deleted_at IS NULL AND tu.status = ?`
+	args := []any{constant.StatusActive}
+
+	if filter.Nama != nil && *filter.Nama != "" {
+		baseSQL += " AND tu.nama ILIKE ?"
+		args = append(args, "%"+*filter.Nama+"%")
+	}
+	if filter.IDPasar != nil {
+		baseSQL += " AND tu.id_pasar = ?"
+		args = append(args, *filter.IDPasar)
+	}
+
+	countSQL := "SELECT COUNT(*) FROM (" + baseSQL + ") counted"
+	var total int64
+	if err := r.db.WithContext(ctx).Raw(countSQL, args...).Scan(&total).Error; err != nil {
+		return nil, entitybase.BasePaginationResult{}, err
+	}
+
+	limit := 10
+	if filter.PaginationFilter.Limit != nil && *filter.PaginationFilter.Limit > 0 {
+		limit = *filter.PaginationFilter.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	offset := 0
+	if filter.PaginationFilter.Offset != nil && *filter.PaginationFilter.Offset > 0 {
+		offset = *filter.PaginationFilter.Offset
+	}
+
+	listSQL := baseSQL + " ORDER BY tu.nama ASC LIMIT ? OFFSET ?"
+	listArgs := append(append([]any{}, args...), limit, offset)
+
+	rows := []entity.PublicTempatUsahaListItem{}
+	if err := r.db.WithContext(ctx).Raw(listSQL, listArgs...).Scan(&rows).Error; err != nil {
+		return nil, entitybase.BasePaginationResult{}, err
+	}
+
+	return rows, entitybase.BasePaginationResult{
+		Offset:  offset,
+		Limit:   limit,
+		Count:   int(total),
+		OrderBy: "nama asc",
+	}, nil
 }
 
 func (r *masterDataRepository) GetPublicPasarDetail(ctx context.Context, id uuid.UUID, filter *entity.TempatUsahaFilter) (*entity.Pasar, []entity.TempatUsaha, entitybase.BasePaginationResult, error) {
@@ -330,15 +570,38 @@ func (r *masterDataRepository) GetPublicTempatUsahaDetail(ctx context.Context, i
 		return nil, nil, nil, entitybase.BasePaginationResult{}, err
 	}
 
-	var pagination entitybase.BasePaginationResult
-	query := r.db.WithContext(ctx).Table("sihp.komoditas k").
-		Joins("JOIN sihp.komoditas_dijual kd ON kd.id_komoditas = k.id AND kd.deleted_at IS NULL").
-		Where("kd.id_tempat_usaha = ?", id)
-	if filter.Name != nil {
-		query = query.Where("k.nama ILIKE ?", "%"+*filter.Name+"%")
+	limit := 50
+	if filter.PaginationFilter.Limit != nil && *filter.PaginationFilter.Limit > 0 {
+		limit = *filter.PaginationFilter.Limit
+		if limit > 1000 {
+			limit = 1000
+		}
 	}
-	query = query.Select("k.id, k.nama, k.satuan, k.gambar_url").Distinct("k.id, k.nama, k.satuan, k.gambar_url")
-	query = entitybase.PaginateEntityQuery(query, "sihp.komoditas", (&entity.Komoditas{}).OrderMap(), &filter.PaginationFilter, &pagination)
+	offset := 0
+	if filter.PaginationFilter.Offset != nil && *filter.PaginationFilter.Offset > 0 {
+		offset = *filter.PaginationFilter.Offset
+	}
+
+	baseSQL := `
+SELECT DISTINCT ON (k.id) k.id, k.nama, k.satuan, k.gambar_url
+FROM sihp.komoditas k
+INNER JOIN sihp.komoditas_dijual kd ON kd.id_komoditas = k.id AND kd.deleted_at IS NULL
+WHERE kd.id_tempat_usaha = ? AND k.deleted_at IS NULL`
+	args := []any{id}
+	if filter.Name != nil && *filter.Name != "" {
+		baseSQL += " AND k.nama ILIKE ?"
+		args = append(args, "%"+*filter.Name+"%")
+	}
+	baseSQL += " ORDER BY k.id, k.nama ASC"
+
+	countSQL := `SELECT COUNT(*) FROM (` + baseSQL + `) counted`
+	var total int64
+	if err := r.db.WithContext(ctx).Raw(countSQL, args...).Scan(&total).Error; err != nil {
+		return nil, nil, nil, entitybase.BasePaginationResult{}, err
+	}
+
+	listSQL := `SELECT * FROM (` + baseSQL + `) items ORDER BY nama ASC LIMIT ? OFFSET ?`
+	listArgs := append(append([]any{}, args...), limit, offset)
 
 	type row struct {
 		ID        uuid.UUID
@@ -347,8 +610,15 @@ func (r *masterDataRepository) GetPublicTempatUsahaDetail(ctx context.Context, i
 		GambarURL *string
 	}
 	rows := []row{}
-	if err := query.Scan(&rows).Error; err != nil {
-		return nil, nil, nil, pagination, err
+	if err := r.db.WithContext(ctx).Raw(listSQL, listArgs...).Scan(&rows).Error; err != nil {
+		return nil, nil, nil, entitybase.BasePaginationResult{}, err
+	}
+
+	pagination := entitybase.BasePaginationResult{
+		Offset:  offset,
+		Limit:   limit,
+		Count:   int(total),
+		OrderBy: "nama asc",
 	}
 
 	result := make([]map[string]any, 0, len(rows))
@@ -358,10 +628,14 @@ func (r *masterDataRepository) GetPublicTempatUsahaDetail(ctx context.Context, i
 			Tanggal time.Time
 			Harga   float64
 		}
-		err := r.db.WithContext(ctx).Table("sihp.harga_pelaporan hp").
-			Joins("JOIN sihp.pengumpulan_data pd ON pd.id = hp.id_pengumpulan_data AND pd.deleted_at IS NULL").
-			Where("hp.id_komoditas = ? AND pd.id_pasar = ? AND pd.status = ?", item.ID, tu.IDPasar, constant.PengumpulanDataFinal).
-			Select("hp.tanggal, hp.harga::float8 as harga").Order("hp.tanggal desc").Limit(1).Scan(&temp).Error
+		err := r.db.WithContext(ctx).Raw(`
+SELECT pd.tanggal, AVG(hr.harga)::float8 AS harga
+FROM sihp.harga_rutin hr
+INNER JOIN sihp.pengumpulan_data pd ON pd.id = hr.id_pengumpulan_data AND pd.deleted_at IS NULL AND pd.status = ?
+WHERE hr.id_komoditas = ? AND hr.id_tempat_usaha = ?
+GROUP BY pd.tanggal
+ORDER BY pd.tanggal DESC
+LIMIT 1`, constant.PengumpulanDataFinal, item.ID, id).Scan(&temp).Error
 		if err != nil {
 			return nil, nil, nil, pagination, err
 		}
