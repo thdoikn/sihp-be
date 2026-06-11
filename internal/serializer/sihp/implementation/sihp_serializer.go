@@ -46,8 +46,16 @@ func (s *serializer) ToPengumpulanData(in entity.PengumpulanData) dto.ResPengump
 func (s *serializer) ToHargaRutin(in entity.HargaRutin) dto.ResHargaRutin {
 	return dto.ResHargaRutin{ID: in.ID, IDPengumpulanData: in.IDPengumpulanData, IDTempatUsaha: in.IDTempatUsaha, IDKomoditas: in.IDKomoditas, KelasKomoditas: in.KelasKomoditas, Harga: in.Harga}
 }
-func (s *serializer) ToHargaPelaporan(in entity.HargaPelaporan) dto.ResHargaPelaporan {
-	return dto.ResHargaPelaporan{ID: in.ID, IDPengumpulanData: in.IDPengumpulanData, IDKomoditas: in.IDKomoditas, Tanggal: in.Tanggal, Harga: in.Harga}
+func (s *serializer) ToHargaPelaporan(in entity.HargaPelaporanEnriched) dto.ResHargaPelaporan {
+	return dto.ResHargaPelaporan{
+		ID:            in.ID,
+		Tanggal:       in.Tanggal,
+		IDPasar:       in.IDPasar,
+		IDKomoditas:   in.IDKomoditas,
+		HargaBesar:    in.HargaBesar,
+		HargaMenengah: in.HargaMenengah,
+		HargaKecil:    in.HargaKecil,
+	}
 }
 func (s *serializer) ToPage(in entitybase.BasePaginationResult) dtobase.BasePagination {
 	return dtobase.BasePagination{Offset: in.Offset, Limit: in.Limit, Count: in.Count, OrderBy: in.OrderBy}
