@@ -11,12 +11,12 @@ import (
 
 type SIHPUsecase interface {
 	GetPublicOverview(ctx context.Context) dto.ResPublicOverviewEnvelope
-	GetPublicKomoditas(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList
+	GetPublicKomoditas(ctx context.Context, req *dto.ReqPublicGetKomoditas) dto.ResPublicKomoditasList
 	GetPublicKomoditasDetail(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicKomoditasDetailEnvelope
 	GetPublicKomoditasTrend(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicTrendEnvelope
-	GetPublicPasar(ctx context.Context, req *dto.ReqGetPasar) dto.ResPasarList
+	GetPublicPasar(ctx context.Context) dto.ResPublicPasarList
 	GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetTempatUsaha) dto.ResPublicPasarDetailEnvelope
-	GetPublicTempatUsaha(ctx context.Context, req *dto.ReqGetTempatUsaha) dto.ResTempatUsahaList
+	GetPublicTempatUsaha(ctx context.Context, req *dto.ReqPublicGetTempatUsaha) dto.ResPublicTempatUsahaList
 	GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetKomoditas) dto.ResPublicTempatUsahaDetailEnvelope
 
 	CreatePasar(ctx context.Context, req *dto.ReqCreatePasar) dto.ResPasarSingle

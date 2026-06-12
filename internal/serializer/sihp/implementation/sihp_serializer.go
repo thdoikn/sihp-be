@@ -13,7 +13,14 @@ type serializer struct{}
 func NewSIHPSerializer() sihpserializer.SIHPSerializer { return &serializer{} }
 
 func (s *serializer) ToPasar(in entity.Pasar) dto.ResPasar {
-	return dto.ResPasar{ID: in.ID, Nama: in.Nama, Alamat: in.Alamat, Status: int16(in.Status)}
+	return dto.ResPasar{
+		ID:        in.ID,
+		Nama:      in.Nama,
+		Alamat:    in.Alamat,
+		Longitude: in.Longitude,
+		Latitude:  in.Latitude,
+		Status:    int16(in.Status),
+	}
 }
 func (s *serializer) ToKomoditas(in entity.Komoditas) dto.ResKomoditas {
 	return dto.ResKomoditas{ID: in.ID, Nama: in.Nama, Satuan: in.Satuan, GambarURL: in.GambarURL}

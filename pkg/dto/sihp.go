@@ -41,21 +41,27 @@ type ReqGetPasar struct {
 }
 
 type ReqCreatePasar struct {
-	Nama   string  `json:"nama" validate:"required"`
-	Alamat *string `json:"alamat"`
+	Nama      string   `json:"nama" validate:"required"`
+	Alamat    *string  `json:"alamat"`
+	Longitude *float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
 }
 
 type ReqUpdatePasar struct {
-	Nama   *string `json:"nama"`
-	Alamat *string `json:"alamat"`
-	Status *int16  `json:"status"`
+	Nama      *string  `json:"nama"`
+	Alamat    *string  `json:"alamat"`
+	Longitude *float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
+	Status    *int16   `json:"status"`
 }
 
 type ResPasar struct {
-	ID     uuid.UUID `json:"id"`
-	Nama   string    `json:"nama"`
-	Alamat *string   `json:"alamat"`
-	Status int16     `json:"status"`
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	Alamat    *string   `json:"alamat"`
+	Longitude float64   `json:"longitude"`
+	Latitude  float64   `json:"latitude"`
+	Status    int16     `json:"status"`
 }
 
 type ResPasarSingle struct {
@@ -73,6 +79,15 @@ type ReqGetKomoditas struct {
 	IDTempatUsaha *uuid.UUID `query:"id_tempat_usaha"`
 	IDPasar       *uuid.UUID `query:"id_pasar"`
 	dtobase.BaseReqQueryPagination
+}
+
+type ReqPublicGetKomoditas struct {
+	Nama          *string    `query:"nama"`
+	Name          *string    `query:"name"`
+	IDTempatUsaha *uuid.UUID `query:"id_tempat_usaha"`
+	IDPasar       *uuid.UUID `query:"id_pasar"`
+	Page          *int       `query:"page"`
+	Limit         *int       `query:"limit"`
 }
 
 type ReqCreateKomoditas struct {
@@ -100,6 +115,59 @@ type ResKomoditasSingle struct {
 type ResKomoditasList struct {
 	dtobase.BaseResPagination
 	Data []ResKomoditas `json:"data"`
+}
+
+type ResPublicKomoditas struct {
+	ID                      uuid.UUID `json:"id"`
+	Nama                    string    `json:"nama"`
+	SatuanDasar             string    `json:"satuan_dasar"`
+	Gambar                  *string   `json:"gambar,omitempty"`
+	HargaPelaporanTerbaru   *float64  `json:"harga_pelaporan_terbaru,omitempty"`
+	HargaPelaporanTerkecil  *float64  `json:"harga_pelaporan_terkecil,omitempty"`
+	HargaPelaporanTerbesar  *float64  `json:"harga_pelaporan_terbesar,omitempty"`
+	HargaPelaporanAvg       *float64  `json:"harga_pelaporan_avg,omitempty"`
+	TanggalPelaporanTerbaru *string   `json:"tanggal_pelaporan_terbaru,omitempty"`
+}
+
+type ResPublicKomoditasList struct {
+	dtobase.BaseResPagination
+	Data []ResPublicKomoditas `json:"data"`
+}
+
+type ResPublicPasar struct {
+	ID               uuid.UUID `json:"id"`
+	Nama             string    `json:"nama"`
+	Alamat           string    `json:"alamat"`
+	IsActive         int16     `json:"is_active"`
+	Longitude        float64   `json:"longitude"`
+	Latitude         float64   `json:"latitude"`
+	TotalTempatUsaha int64     `json:"total_tempat_usaha"`
+	TotalKomoditas   int64     `json:"total_komoditas"`
+}
+
+type ResPublicPasarList struct {
+	dtobase.BaseRes
+	Data []ResPublicPasar `json:"data"`
+}
+
+type ReqPublicGetTempatUsaha struct {
+	Nama    *string    `query:"nama"`
+	Name    *string    `query:"name"`
+	IDPasar *uuid.UUID `query:"id_pasar"`
+	Page    *int       `query:"page"`
+	Limit   *int       `query:"limit"`
+}
+
+type ResPublicTempatUsaha struct {
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	PasarID   uuid.UUID `json:"pasar_id"`
+	PasarNama string    `json:"pasar_nama"`
+}
+
+type ResPublicTempatUsahaList struct {
+	dtobase.BaseResPagination
+	Data []ResPublicTempatUsaha `json:"data"`
 }
 
 type ReqGetTempatUsaha struct {

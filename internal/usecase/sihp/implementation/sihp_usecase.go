@@ -90,8 +90,74 @@ func (u *usecase) tempatUsahaFilter(req *dto.ReqGetTempatUsaha, defaultActive bo
 	return f
 }
 
-func (u *usecase) GetPublicKomoditas(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList {
-	return u.GetKomoditasByFilter(ctx, req)
+func (u *usecase) publicKomoditasPagination(req *dto.ReqPublicGetKomoditas) entitybase.BasePaginationFilter {
+	limit := 10
+	if req.Limit != nil && *req.Limit > 0 {
+		limit = *req.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	page := 1
+	if req.Page != nil && *req.Page > 0 {
+		page = *req.Page
+	}
+	offset := (page - 1) * limit
+	return entitybase.BasePaginationFilter{
+		Offset: &offset,
+		Limit:  &limit,
+	}
+}
+
+func (u *usecase) toResPublicKomoditas(item entity.PublicKomoditasListItem) dto.ResPublicKomoditas {
+	satuan := "kg"
+	if item.Satuan != nil && *item.Satuan != "" {
+		satuan = *item.Satuan
+	}
+	var tanggal *string
+	if item.TanggalTerbaru != nil && !item.TanggalTerbaru.IsZero() {
+		formatted := item.TanggalTerbaru.Format("2006-01-02")
+		tanggal = &formatted
+	}
+	return dto.ResPublicKomoditas{
+		ID:                      item.ID,
+		Nama:                    item.Nama,
+		SatuanDasar:             satuan,
+		Gambar:                  item.GambarURL,
+		HargaPelaporanTerbaru:   item.HargaTerbaru,
+		HargaPelaporanTerkecil:  item.HargaTerkecil,
+		HargaPelaporanTerbesar:  item.HargaTerbesar,
+		HargaPelaporanAvg:       item.HargaAvg,
+		TanggalPelaporanTerbaru: tanggal,
+	}
+}
+
+func (u *usecase) GetPublicKomoditas(ctx context.Context, req *dto.ReqPublicGetKomoditas) dto.ResPublicKomoditasList {
+	name := req.Nama
+	if name == nil || *name == "" {
+		name = req.Name
+	}
+	filter := entity.PublicKomoditasListFilter{
+		Nama:             name,
+		IDPasar:          req.IDPasar,
+		IDTempatUsaha:    req.IDTempatUsaha,
+		PaginationFilter: u.publicKomoditasPagination(req),
+	}
+	rows, page, err := u.masterDataRepo.GetPublicKomoditasList(ctx, &filter)
+	if err != nil {
+		return dto.ResPublicKomoditasList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+	}
+	res := make([]dto.ResPublicKomoditas, 0, len(rows))
+	for _, row := range rows {
+		res = append(res, u.toResPublicKomoditas(row))
+	}
+	return dto.ResPublicKomoditasList{
+		BaseResPagination: dtobase.BaseResPagination{
+			BaseRes: u.baseRes(http.StatusOK, "Success", nil),
+			Page:    u.serializer.ToPage(page),
+		},
+		Data: res,
+	}
 }
 func (u *usecase) GetPublicKomoditasDetail(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicKomoditasDetailEnvelope {
 	days := 30
@@ -125,17 +191,33 @@ func (u *usecase) GetPublicKomoditasTrend(ctx context.Context, id uuid.UUID, req
 	}
 	return dto.ResPublicTrendEnvelope{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Data: out}
 }
-func (u *usecase) GetPublicPasar(ctx context.Context, req *dto.ReqGetPasar) dto.ResPasarList {
-	filter := u.pasarFilter(req, true)
-	rows, page, err := u.masterDataRepo.GetPasarByFilter(ctx, &filter)
+func (u *usecase) toResPublicPasar(item entity.PublicPasarListItem) dto.ResPublicPasar {
+	alamat := ""
+	if item.Alamat != nil {
+		alamat = *item.Alamat
+	}
+	return dto.ResPublicPasar{
+		ID:               item.ID,
+		Nama:             item.Nama,
+		Alamat:           alamat,
+		IsActive:         item.Status,
+		Longitude:        item.Longitude,
+		Latitude:         item.Latitude,
+		TotalTempatUsaha: item.TotalTempatUsaha,
+		TotalKomoditas:   item.TotalKomoditas,
+	}
+}
+
+func (u *usecase) GetPublicPasar(ctx context.Context) dto.ResPublicPasarList {
+	rows, err := u.masterDataRepo.GetPublicPasarList(ctx)
 	if err != nil {
-		return dto.ResPasarList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+		return dto.ResPublicPasarList{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
-	res := make([]dto.ResPasar, 0, len(rows))
+	res := make([]dto.ResPublicPasar, 0, len(rows))
 	for _, row := range rows {
-		res = append(res, u.serializer.ToPasar(row))
+		res = append(res, u.toResPublicPasar(row))
 	}
-	return dto.ResPasarList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Page: u.serializer.ToPage(page)}, Data: res}
+	return dto.ResPublicPasarList{BaseRes: u.baseRes(http.StatusOK, "Success", nil), Data: res}
 }
 func (u *usecase) GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetTempatUsaha) dto.ResPublicPasarDetailEnvelope {
 	filter := u.tempatUsahaFilter(req, true)
@@ -149,8 +231,55 @@ func (u *usecase) GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *d
 	}
 	return dto.ResPublicPasarDetailEnvelope{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Data: &dto.ResPublicPasarDetail{Pasar: u.serializer.ToPasar(*pasar), TempatUsaha: arr, Page: u.serializer.ToPage(page)}}
 }
-func (u *usecase) GetPublicTempatUsaha(ctx context.Context, req *dto.ReqGetTempatUsaha) dto.ResTempatUsahaList {
-	return u.GetTempatUsahaByFilter(ctx, req)
+func (u *usecase) publicTempatUsahaPagination(req *dto.ReqPublicGetTempatUsaha) entitybase.BasePaginationFilter {
+	limit := 10
+	if req.Limit != nil && *req.Limit > 0 {
+		limit = *req.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	page := 1
+	if req.Page != nil && *req.Page > 0 {
+		page = *req.Page
+	}
+	offset := (page - 1) * limit
+	return entitybase.BasePaginationFilter{
+		Offset: &offset,
+		Limit:  &limit,
+	}
+}
+
+func (u *usecase) GetPublicTempatUsaha(ctx context.Context, req *dto.ReqPublicGetTempatUsaha) dto.ResPublicTempatUsahaList {
+	name := req.Nama
+	if name == nil || *name == "" {
+		name = req.Name
+	}
+	filter := entity.PublicTempatUsahaListFilter{
+		Nama:             name,
+		IDPasar:          req.IDPasar,
+		PaginationFilter: u.publicTempatUsahaPagination(req),
+	}
+	rows, page, err := u.masterDataRepo.GetPublicTempatUsahaList(ctx, &filter)
+	if err != nil {
+		return dto.ResPublicTempatUsahaList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+	}
+	res := make([]dto.ResPublicTempatUsaha, 0, len(rows))
+	for _, row := range rows {
+		res = append(res, dto.ResPublicTempatUsaha{
+			ID:        row.ID,
+			Nama:      row.Nama,
+			PasarID:   row.PasarID,
+			PasarNama: row.PasarNama,
+		})
+	}
+	return dto.ResPublicTempatUsahaList{
+		BaseResPagination: dtobase.BaseResPagination{
+			BaseRes: u.baseRes(http.StatusOK, "Success", nil),
+			Page:    u.serializer.ToPage(page),
+		},
+		Data: res,
+	}
 }
 func (u *usecase) GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetKomoditas) dto.ResPublicTempatUsahaDetailEnvelope {
 	filter := u.komoditasFilter(req)
@@ -188,7 +317,14 @@ func (u *usecase) CreatePasar(ctx context.Context, req *dto.ReqCreatePasar) dto.
 	if err := u.validator.Struct(req); err != nil {
 		return dto.ResPasarSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
-	obj, err := u.masterDataRepo.CreatePasar(ctx, &entity.Pasar{Nama: req.Nama, Alamat: req.Alamat, Status: constant.StatusActive})
+	pasar := &entity.Pasar{Nama: req.Nama, Alamat: req.Alamat, Status: constant.StatusActive}
+	if req.Longitude != nil {
+		pasar.Longitude = *req.Longitude
+	}
+	if req.Latitude != nil {
+		pasar.Latitude = *req.Latitude
+	}
+	obj, err := u.masterDataRepo.CreatePasar(ctx, pasar)
 	if err != nil {
 		return dto.ResPasarSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
@@ -222,6 +358,12 @@ func (u *usecase) UpdatePasar(ctx context.Context, id uuid.UUID, req *dto.ReqUpd
 	}
 	if req.Alamat != nil {
 		update["alamat"] = req.Alamat
+	}
+	if req.Longitude != nil {
+		update["longitude"] = *req.Longitude
+	}
+	if req.Latitude != nil {
+		update["latitude"] = *req.Latitude
 	}
 	if req.Status != nil {
 		update["status"] = *req.Status

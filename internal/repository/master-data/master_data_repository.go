@@ -31,8 +31,11 @@ type MasterDataRepository interface {
 	GetKomoditasDijualByFilter(ctx context.Context, filter *entity.KomoditasDijualFilter) ([]entity.KomoditasDijual, entitybase.BasePaginationResult, error)
 	UpdateKomoditasDijual(ctx context.Context, id uuid.UUID, updateMap map[string]any) (*entity.KomoditasDijual, error)
 
+	GetPublicKomoditasList(ctx context.Context, filter *entity.PublicKomoditasListFilter) ([]entity.PublicKomoditasListItem, entitybase.BasePaginationResult, error)
 	GetPublicKomoditasStats(ctx context.Context, komoditasID uuid.UUID, days int, idPasar *uuid.UUID) (*time.Time, *float64, *float64, *float64, *float64, error)
 	GetPublicKomoditasTrend(ctx context.Context, komoditasID uuid.UUID, days int, idPasar *uuid.UUID) ([]map[string]any, error)
+	GetPublicPasarList(ctx context.Context) ([]entity.PublicPasarListItem, error)
 	GetPublicPasarDetail(ctx context.Context, id uuid.UUID, filter *entity.TempatUsahaFilter) (*entity.Pasar, []entity.TempatUsaha, entitybase.BasePaginationResult, error)
+	GetPublicTempatUsahaList(ctx context.Context, filter *entity.PublicTempatUsahaListFilter) ([]entity.PublicTempatUsahaListItem, entitybase.BasePaginationResult, error)
 	GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, filter entity.KomoditasFilter) (*entity.TempatUsaha, *entity.Pasar, []map[string]any, entitybase.BasePaginationResult, error)
 }

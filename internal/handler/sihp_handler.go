@@ -35,17 +35,15 @@ func (h *sihpHandler) PublicOverview(c *fiber.Ctx) error {
 // @Description Get public komoditas list
 // @Tags Public
 // @Produce json
-// @Param name query string false "Komoditas name"
+// @Param nama query string false "Komoditas name"
 // @Param id_tempat_usaha query string false "Tempat usaha ID"
 // @Param id_pasar query string false "Pasar ID"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
+// @Param page query int false "Page number"
 // @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResKomoditasList
+// @Success 200 {object} dto.ResPublicKomoditasList
 // @Router /public/komoditas [get]
 func (h *sihpHandler) PublicKomoditas(c *fiber.Ctx) error {
-	var req dto.ReqGetKomoditas
+	var req dto.ReqPublicGetKomoditas
 	_ = c.QueryParser(&req)
 	res := h.usecase.GetPublicKomoditas(c.Context(), &req)
 	return c.Status(res.Code).JSON(res)
@@ -87,21 +85,13 @@ func (h *sihpHandler) PublicKomoditasTrend(c *fiber.Ctx) error {
 
 // PublicPasar godoc
 // @Summary Public pasar list
-// @Description Get public pasar list
+// @Description Get public active pasar list with stats
 // @Tags Public
 // @Produce json
-// @Param name query string false "Pasar name"
-// @Param status query int false "Pasar status"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
-// @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResPasarList
+// @Success 200 {object} dto.ResPublicPasarList
 // @Router /public/pasar [get]
 func (h *sihpHandler) PublicPasar(c *fiber.Ctx) error {
-	var req dto.ReqGetPasar
-	_ = c.QueryParser(&req)
-	res := h.usecase.GetPublicPasar(c.Context(), &req)
+	res := h.usecase.GetPublicPasar(c.Context())
 	return c.Status(res.Code).JSON(res)
 }
 
@@ -128,20 +118,17 @@ func (h *sihpHandler) PublicPasarDetail(c *fiber.Ctx) error {
 
 // PublicTempatUsaha godoc
 // @Summary Public tempat usaha list
-// @Description Get public tempat usaha list
+// @Description Get public active tempat usaha list
 // @Tags Public
 // @Produce json
-// @Param name query string false "Tempat usaha name"
+// @Param nama query string false "Tempat usaha name"
 // @Param id_pasar query string false "Pasar ID"
-// @Param status query int false "Tempat usaha status"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
+// @Param page query int false "Page number"
 // @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResTempatUsahaList
+// @Success 200 {object} dto.ResPublicTempatUsahaList
 // @Router /public/tempat-usaha [get]
 func (h *sihpHandler) PublicTempatUsaha(c *fiber.Ctx) error {
-	var req dto.ReqGetTempatUsaha
+	var req dto.ReqPublicGetTempatUsaha
 	_ = c.QueryParser(&req)
 	res := h.usecase.GetPublicTempatUsaha(c.Context(), &req)
 	return c.Status(res.Code).JSON(res)

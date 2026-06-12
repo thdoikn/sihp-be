@@ -1,6 +1,8 @@
 package entity
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	entitybase "github.com/thdoikn/sihp-be/internal/entity/base"
 	"github.com/thdoikn/sihp-be/pkg/constant"
@@ -8,9 +10,11 @@ import (
 
 type Pasar struct {
 	entitybase.Base
-	Nama   string                        `gorm:"column:nama;type:varchar(255);not null"`
-	Alamat *string                       `gorm:"column:alamat;type:text"`
-	Status constant.ActiveInactiveStatus `gorm:"column:status;type:smallint;not null;default:1"`
+	Nama      string                        `gorm:"column:nama;type:varchar(255);not null"`
+	Alamat    *string                       `gorm:"column:alamat;type:text"`
+	Longitude float64                       `gorm:"column:longitude;type:double precision;not null;default:0"`
+	Latitude  float64                       `gorm:"column:latitude;type:double precision;not null;default:0"`
+	Status    constant.ActiveInactiveStatus `gorm:"column:status;type:smallint;not null;default:1"`
 
 	// Relation
 	TempatUsaha []TempatUsaha `gorm:"foreignKey:IDPasar;references:ID"`
@@ -42,6 +46,49 @@ func (k *Komoditas) OrderMap() map[string]bool {
 	out := entitybase.GenerateBaseOrderMap()
 	out["nama"] = true
 	return out
+}
+
+type PublicKomoditasListItem struct {
+	ID             uuid.UUID  `gorm:"column:id"`
+	Nama           string     `gorm:"column:nama"`
+	Satuan         *string    `gorm:"column:satuan"`
+	GambarURL      *string    `gorm:"column:gambar_url"`
+	HargaTerbaru   *float64   `gorm:"column:harga_terbaru"`
+	HargaTerkecil  *float64   `gorm:"column:harga_terkecil"`
+	HargaTerbesar  *float64   `gorm:"column:harga_terbesar"`
+	HargaAvg       *float64   `gorm:"column:harga_avg"`
+	TanggalTerbaru *time.Time `gorm:"column:tanggal_terbaru"`
+}
+
+type PublicKomoditasListFilter struct {
+	Nama             *string
+	IDPasar          *uuid.UUID
+	IDTempatUsaha    *uuid.UUID
+	PaginationFilter entitybase.BasePaginationFilter
+}
+
+type PublicPasarListItem struct {
+	ID               uuid.UUID `gorm:"column:id"`
+	Nama             string    `gorm:"column:nama"`
+	Alamat           *string   `gorm:"column:alamat"`
+	Status           int16     `gorm:"column:status"`
+	Longitude        float64   `gorm:"column:longitude"`
+	Latitude         float64   `gorm:"column:latitude"`
+	TotalTempatUsaha int64     `gorm:"column:total_tempat_usaha"`
+	TotalKomoditas   int64     `gorm:"column:total_komoditas"`
+}
+
+type PublicTempatUsahaListItem struct {
+	ID        uuid.UUID `gorm:"column:id"`
+	Nama      string    `gorm:"column:nama"`
+	PasarID   uuid.UUID `gorm:"column:pasar_id"`
+	PasarNama string    `gorm:"column:pasar_nama"`
+}
+
+type PublicTempatUsahaListFilter struct {
+	Nama             *string
+	IDPasar          *uuid.UUID
+	PaginationFilter entitybase.BasePaginationFilter
 }
 
 type TempatUsaha struct {
