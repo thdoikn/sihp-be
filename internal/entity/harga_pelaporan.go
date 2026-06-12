@@ -32,3 +32,11 @@ type HargaPelaporanFilter struct {
 	Status           *constant.PengumpulanDataStatus
 	PaginationFilter entitybase.BasePaginationFilter
 }
+
+type HargaPelaporanEnriched struct {
+	HargaPelaporan
+	IDPasar       uuid.UUID
+	HargaBesar    *int64
+	HargaMenengah *int64
+	HargaKecil    *int64
+}

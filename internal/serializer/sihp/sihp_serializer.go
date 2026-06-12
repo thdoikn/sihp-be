@@ -14,6 +14,6 @@ type SIHPSerializer interface {
 	ToKomoditasDijual(entity.KomoditasDijual) dto.ResKomoditasDijual
 	ToPengumpulanData(entity.PengumpulanData) dto.ResPengumpulanData
 	ToHargaRutin(entity.HargaRutin) dto.ResHargaRutin
-	ToHargaPelaporan(entity.HargaPelaporan) dto.ResHargaPelaporan
+	ToHargaPelaporan(entity.HargaPelaporanEnriched) dto.ResHargaPelaporan
 	ToPage(entitybase.BasePaginationResult) dtobase.BasePagination
 }

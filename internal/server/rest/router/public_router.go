@@ -12,7 +12,7 @@ func PublicRouter(deps *Dependencies) {
 	masterDataRepo := masterdatarepository.NewMasterDataRepository(deps.DB)
 	transactionDataRepo := transactiondatarepository.NewTransactionDataRepository(deps.DB)
 	serializer := sihpserializer.NewSIHPSerializer()
-	usecase := sihpusecase.NewSIHPUsecase(masterDataRepo, transactionDataRepo, serializer, deps.Cfg)
+	usecase := sihpusecase.NewSIHPUsecase(masterDataRepo, transactionDataRepo, serializer, deps.Storage, deps.Cfg)
 	h := handler.NewSIHPHandler(usecase)
 
 	group := deps.App.Group("/v1/public")

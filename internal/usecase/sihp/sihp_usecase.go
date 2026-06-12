@@ -2,6 +2,7 @@ package sihpusecase
 
 import (
 	"context"
+	"io"
 
 	"github.com/google/uuid"
 	"github.com/thdoikn/sihp-be/pkg/dto"
@@ -10,12 +11,12 @@ import (
 
 type SIHPUsecase interface {
 	GetPublicOverview(ctx context.Context) dto.ResPublicOverviewEnvelope
-	GetPublicKomoditas(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList
+	GetPublicKomoditas(ctx context.Context, req *dto.ReqPublicGetKomoditas) dto.ResPublicKomoditasList
 	GetPublicKomoditasDetail(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicKomoditasDetailEnvelope
 	GetPublicKomoditasTrend(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicTrendEnvelope
-	GetPublicPasar(ctx context.Context, req *dto.ReqGetPasar) dto.ResPasarList
+	GetPublicPasar(ctx context.Context) dto.ResPublicPasarList
 	GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetTempatUsaha) dto.ResPublicPasarDetailEnvelope
-	GetPublicTempatUsaha(ctx context.Context, req *dto.ReqGetTempatUsaha) dto.ResTempatUsahaList
+	GetPublicTempatUsaha(ctx context.Context, req *dto.ReqPublicGetTempatUsaha) dto.ResPublicTempatUsahaList
 	GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetKomoditas) dto.ResPublicTempatUsahaDetailEnvelope
 
 	CreatePasar(ctx context.Context, req *dto.ReqCreatePasar) dto.ResPasarSingle
@@ -28,6 +29,7 @@ type SIHPUsecase interface {
 	GetKomoditasByID(ctx context.Context, id uuid.UUID) dto.ResKomoditasSingle
 	GetKomoditasByFilter(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList
 	UpdateKomoditas(ctx context.Context, id uuid.UUID, req *dto.ReqUpdateKomoditas) dto.ResKomoditasSingle
+	UploadKomoditasGambar(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResKomoditasSingle
 
 	CreateTempatUsaha(ctx context.Context, req *dto.ReqCreateTempatUsaha) dto.ResTempatUsahaSingle
 	GetTempatUsahaByID(ctx context.Context, id uuid.UUID) dto.ResTempatUsahaSingle
@@ -47,6 +49,7 @@ type SIHPUsecase interface {
 	UpdatePengumpulanData(ctx context.Context, id uuid.UUID, req *dto.ReqUpdatePengumpulanData) dto.ResPengumpulanDataSingle
 	DeletePengumpulanData(ctx context.Context, id uuid.UUID) dtobase.BaseRes
 	FinalizePengumpulanData(ctx context.Context, id uuid.UUID) dto.ResFinalizePengumpulanDataEnvelope
+	UploadPengumpulanTandaTangan(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResPengumpulanDataSingle
 
 	CreateHargaRutin(ctx context.Context, req *dto.ReqCreateHargaRutin) dto.ResHargaRutinSingle
 	GetHargaRutinByID(ctx context.Context, id uuid.UUID) dto.ResHargaRutinSingle

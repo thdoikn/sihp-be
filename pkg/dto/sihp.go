@@ -41,21 +41,27 @@ type ReqGetPasar struct {
 }
 
 type ReqCreatePasar struct {
-	Nama   string  `json:"nama" validate:"required"`
-	Alamat *string `json:"alamat"`
+	Nama      string   `json:"nama" validate:"required"`
+	Alamat    *string  `json:"alamat"`
+	Longitude *float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
 }
 
 type ReqUpdatePasar struct {
-	Nama   *string `json:"nama"`
-	Alamat *string `json:"alamat"`
-	Status *int16  `json:"status"`
+	Nama      *string  `json:"nama"`
+	Alamat    *string  `json:"alamat"`
+	Longitude *float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
+	Status    *int16   `json:"status"`
 }
 
 type ResPasar struct {
-	ID     uuid.UUID `json:"id"`
-	Nama   string    `json:"nama"`
-	Alamat *string   `json:"alamat"`
-	Status int16     `json:"status"`
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	Alamat    *string   `json:"alamat"`
+	Longitude float64   `json:"longitude"`
+	Latitude  float64   `json:"latitude"`
+	Status    int16     `json:"status"`
 }
 
 type ResPasarSingle struct {
@@ -75,6 +81,15 @@ type ReqGetKomoditas struct {
 	dtobase.BaseReqQueryPagination
 }
 
+type ReqPublicGetKomoditas struct {
+	Nama          *string    `query:"nama"`
+	Name          *string    `query:"name"`
+	IDTempatUsaha *uuid.UUID `query:"id_tempat_usaha"`
+	IDPasar       *uuid.UUID `query:"id_pasar"`
+	Page          *int       `query:"page"`
+	Limit         *int       `query:"limit"`
+}
+
 type ReqCreateKomoditas struct {
 	Nama   string  `json:"nama" validate:"required"`
 	Satuan *string `json:"satuan"`
@@ -86,9 +101,10 @@ type ReqUpdateKomoditas struct {
 }
 
 type ResKomoditas struct {
-	ID     uuid.UUID `json:"id"`
-	Nama   string    `json:"nama"`
-	Satuan *string   `json:"satuan"`
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	Satuan    *string   `json:"satuan"`
+	GambarURL *string   `json:"gambar_url"`
 }
 
 type ResKomoditasSingle struct {
@@ -99,6 +115,59 @@ type ResKomoditasSingle struct {
 type ResKomoditasList struct {
 	dtobase.BaseResPagination
 	Data []ResKomoditas `json:"data"`
+}
+
+type ResPublicKomoditas struct {
+	ID                      uuid.UUID `json:"id"`
+	Nama                    string    `json:"nama"`
+	SatuanDasar             string    `json:"satuan_dasar"`
+	Gambar                  *string   `json:"gambar,omitempty"`
+	HargaPelaporanTerbaru   *float64  `json:"harga_pelaporan_terbaru,omitempty"`
+	HargaPelaporanTerkecil  *float64  `json:"harga_pelaporan_terkecil,omitempty"`
+	HargaPelaporanTerbesar  *float64  `json:"harga_pelaporan_terbesar,omitempty"`
+	HargaPelaporanAvg       *float64  `json:"harga_pelaporan_avg,omitempty"`
+	TanggalPelaporanTerbaru *string   `json:"tanggal_pelaporan_terbaru,omitempty"`
+}
+
+type ResPublicKomoditasList struct {
+	dtobase.BaseResPagination
+	Data []ResPublicKomoditas `json:"data"`
+}
+
+type ResPublicPasar struct {
+	ID               uuid.UUID `json:"id"`
+	Nama             string    `json:"nama"`
+	Alamat           string    `json:"alamat"`
+	IsActive         int16     `json:"is_active"`
+	Longitude        float64   `json:"longitude"`
+	Latitude         float64   `json:"latitude"`
+	TotalTempatUsaha int64     `json:"total_tempat_usaha"`
+	TotalKomoditas   int64     `json:"total_komoditas"`
+}
+
+type ResPublicPasarList struct {
+	dtobase.BaseRes
+	Data []ResPublicPasar `json:"data"`
+}
+
+type ReqPublicGetTempatUsaha struct {
+	Nama    *string    `query:"nama"`
+	Name    *string    `query:"name"`
+	IDPasar *uuid.UUID `query:"id_pasar"`
+	Page    *int       `query:"page"`
+	Limit   *int       `query:"limit"`
+}
+
+type ResPublicTempatUsaha struct {
+	ID        uuid.UUID `json:"id"`
+	Nama      string    `json:"nama"`
+	PasarID   uuid.UUID `json:"pasar_id"`
+	PasarNama string    `json:"pasar_nama"`
+}
+
+type ResPublicTempatUsahaList struct {
+	dtobase.BaseResPagination
+	Data []ResPublicTempatUsaha `json:"data"`
 }
 
 type ReqGetTempatUsaha struct {
@@ -147,19 +216,50 @@ type ReqGetKomoditasDijual struct {
 }
 
 type ReqCreateKomoditasDijual struct {
-	IDTempatUsaha uuid.UUID `json:"id_tempat_usaha" validate:"required"`
-	IDKomoditas   uuid.UUID `json:"id_komoditas" validate:"required"`
+	IDTempatUsaha            uuid.UUID `json:"id_tempat_usaha" validate:"required"`
+	IDKomoditas              uuid.UUID `json:"id_komoditas" validate:"required"`
+	HargaNormal              float64   `json:"harga_normal"`
+	HargaMahal               float64   `json:"harga_mahal"`
+	SatuanStok               string    `json:"satuan_stok"`
+	NilaiStok                float64   `json:"nilai_stok"`
+	SatuanPeriode            string    `json:"satuan_periode"`
+	NilaiPeriode             int       `json:"nilai_periode"`
+	LokasiSupplier           string    `json:"lokasi_supplier"`
+	PolaDistribusi           *string   `json:"pola_distribusi"`
+	StandardizedStockPeriode *float64  `json:"standardized_stock_periode"`
+	Status                   *int16    `json:"status"`
 }
 
 type ReqUpdateKomoditasDijual struct {
-	Status *int16 `json:"status"`
+	HargaNormal              *float64 `json:"harga_normal"`
+	HargaMahal               *float64 `json:"harga_mahal"`
+	SatuanStok               *string  `json:"satuan_stok"`
+	NilaiStok                *float64 `json:"nilai_stok"`
+	SatuanPeriode            *string  `json:"satuan_periode"`
+	NilaiPeriode             *int     `json:"nilai_periode"`
+	LokasiSupplier           *string  `json:"lokasi_supplier"`
+	PolaDistribusi           *string  `json:"pola_distribusi"`
+	StandardizedStockPeriode *float64 `json:"standardized_stock_periode"`
+	KelasKomoditas           *string  `json:"kelas_komoditas"`
+	Status                   *int16   `json:"status"`
 }
 
 type ResKomoditasDijual struct {
-	ID            uuid.UUID `json:"id"`
-	IDTempatUsaha uuid.UUID `json:"id_tempat_usaha"`
-	IDKomoditas   uuid.UUID `json:"id_komoditas"`
-	Status        int16     `json:"status"`
+	ID                       uuid.UUID `json:"id"`
+	IDTempatUsaha            uuid.UUID `json:"id_tempat_usaha"`
+	IDKomoditas              uuid.UUID `json:"id_komoditas"`
+	HargaNormal              float64   `json:"harga_normal"`
+	HargaMahal               float64   `json:"harga_mahal"`
+	HargaAvg                 *float64  `json:"harga_avg,omitempty"`
+	SatuanStok               string    `json:"satuan_stok"`
+	NilaiStok                float64   `json:"nilai_stok"`
+	SatuanPeriode            string    `json:"satuan_periode"`
+	NilaiPeriode             int       `json:"nilai_periode"`
+	LokasiSupplier           string    `json:"lokasi_supplier"`
+	PolaDistribusi           *string   `json:"pola_distribusi,omitempty"`
+	StandardizedStockPeriode float64   `json:"standardized_stock_periode"`
+	KelasKomoditas           *string   `json:"kelas_komoditas,omitempty"`
+	Status                   int16     `json:"status"`
 }
 
 type ResKomoditasDijualSingle struct {
@@ -268,11 +368,13 @@ type ReqGetHargaPelaporan struct {
 }
 
 type ResHargaPelaporan struct {
-	ID                uuid.UUID `json:"id"`
-	IDPengumpulanData uuid.UUID `json:"id_pengumpulan_data"`
-	IDKomoditas       uuid.UUID `json:"id_komoditas"`
-	Tanggal           time.Time `json:"tanggal"`
-	Harga             int64     `json:"harga"`
+	ID            uuid.UUID `json:"id"`
+	Tanggal       time.Time `json:"tanggal"`
+	IDPasar       uuid.UUID `json:"pasar_id"`
+	IDKomoditas   uuid.UUID `json:"komoditas_id"`
+	HargaBesar    *int64    `json:"harga_besar,omitempty"`
+	HargaMenengah *int64    `json:"harga_menengah,omitempty"`
+	HargaKecil    *int64    `json:"harga_kecil,omitempty"`
 }
 
 type ResHargaPelaporanSingle struct {

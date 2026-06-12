@@ -12,6 +12,7 @@ type Config struct {
 	AppConfig
 	SwaggerAuth
 	DatabaseConfig
+	MinIO MinIOConfig
 	LogConfig
 	CORSConfig
 	JWTConfig
@@ -29,7 +30,7 @@ type AppConfig struct {
 	ReadTimeout  int    `envconfig:"APP_READ_TIMEOUT" default:"10"`
 	WriteTimeout int    `envconfig:"APP_WRITE_TIMEOUT" default:"120"`
 	IdleTimeout  int    `envconfig:"APP_IDLE_TIMEOUT" default:"60"`
-	BodyLimit    int    `envconfig:"APP_BODY_LIMIT" default:"4"`
+	BodyLimit    int    `envconfig:"APP_BODY_LIMIT" default:"4"` // megabytes when value <= 1024
 }
 
 // DatabaseConfig holds database configuration
@@ -79,6 +80,16 @@ type RateLimitConfig struct {
 type SwaggerAuth struct {
 	SwaggerUsername string `envconfig:"SWAGGER_USERNAME" required:"true"`
 	SwaggerPassword string `envconfig:"SWAGGER_PASSWORD" required:"true"`
+}
+
+// MinIOConfig holds MinIO object storage configuration
+type MinIOConfig struct {
+	Endpoint  string `envconfig:"MINIO_ENDPOINT" default:"127.0.0.1:9000"`
+	AccessKey string `envconfig:"MINIO_ACCESS_KEY" default:"minioadmin"`
+	SecretKey string `envconfig:"MINIO_SECRET_KEY" default:"minioadmin"`
+	Bucket    string `envconfig:"MINIO_BUCKET" default:"komoditas"`
+	UseSSL    bool   `envconfig:"MINIO_USE_SSL" default:"false"`
+	PublicURL string `envconfig:"MINIO_PUBLIC_URL" default:"http://127.0.0.1:9000/komoditas"`
 }
 
 // Load loads configuration

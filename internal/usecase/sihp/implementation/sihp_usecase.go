@@ -2,8 +2,11 @@ package sihpusecaseimplementation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -18,6 +21,8 @@ import (
 	"github.com/thdoikn/sihp-be/pkg/constant"
 	"github.com/thdoikn/sihp-be/pkg/dto"
 	dtobase "github.com/thdoikn/sihp-be/pkg/dto/base"
+	"github.com/thdoikn/sihp-be/pkg/storage"
+	miniostorage "github.com/thdoikn/sihp-be/pkg/storage/minio"
 	httphelper "github.com/thdoikn/sihp-be/pkg/helper/http"
 	queryhelper "github.com/thdoikn/sihp-be/pkg/helper/query"
 	"gorm.io/gorm"
@@ -31,15 +36,17 @@ type usecase struct {
 	masterDataRepo      masterdatarepository.MasterDataRepository
 	transactionDataRepo transactiondatarepository.TransactionDataRepository
 	serializer          sihpserializer.SIHPSerializer
+	storage             storage.KomoditasStorage
 	cfg                 *config.Config
 	validator           *validator.Validate
 }
 
-func NewSIHPUsecase(masterDataRepo masterdatarepository.MasterDataRepository, transactionDataRepo transactiondatarepository.TransactionDataRepository, serializer sihpserializer.SIHPSerializer, cfg *config.Config) sihpusecase.SIHPUsecase {
+func NewSIHPUsecase(masterDataRepo masterdatarepository.MasterDataRepository, transactionDataRepo transactiondatarepository.TransactionDataRepository, serializer sihpserializer.SIHPSerializer, komoditasStorage storage.KomoditasStorage, cfg *config.Config) sihpusecase.SIHPUsecase {
 	return &usecase{
 		masterDataRepo:      masterDataRepo,
 		transactionDataRepo: transactionDataRepo,
 		serializer:          serializer,
+		storage:             komoditasStorage,
 		cfg:                 cfg,
 		validator:           validator.New(validator.WithRequiredStructEnabled()),
 	}
@@ -83,8 +90,74 @@ func (u *usecase) tempatUsahaFilter(req *dto.ReqGetTempatUsaha, defaultActive bo
 	return f
 }
 
-func (u *usecase) GetPublicKomoditas(ctx context.Context, req *dto.ReqGetKomoditas) dto.ResKomoditasList {
-	return u.GetKomoditasByFilter(ctx, req)
+func (u *usecase) publicKomoditasPagination(req *dto.ReqPublicGetKomoditas) entitybase.BasePaginationFilter {
+	limit := 10
+	if req.Limit != nil && *req.Limit > 0 {
+		limit = *req.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	page := 1
+	if req.Page != nil && *req.Page > 0 {
+		page = *req.Page
+	}
+	offset := (page - 1) * limit
+	return entitybase.BasePaginationFilter{
+		Offset: &offset,
+		Limit:  &limit,
+	}
+}
+
+func (u *usecase) toResPublicKomoditas(item entity.PublicKomoditasListItem) dto.ResPublicKomoditas {
+	satuan := "kg"
+	if item.Satuan != nil && *item.Satuan != "" {
+		satuan = *item.Satuan
+	}
+	var tanggal *string
+	if item.TanggalTerbaru != nil && !item.TanggalTerbaru.IsZero() {
+		formatted := item.TanggalTerbaru.Format("2006-01-02")
+		tanggal = &formatted
+	}
+	return dto.ResPublicKomoditas{
+		ID:                      item.ID,
+		Nama:                    item.Nama,
+		SatuanDasar:             satuan,
+		Gambar:                  item.GambarURL,
+		HargaPelaporanTerbaru:   item.HargaTerbaru,
+		HargaPelaporanTerkecil:  item.HargaTerkecil,
+		HargaPelaporanTerbesar:  item.HargaTerbesar,
+		HargaPelaporanAvg:       item.HargaAvg,
+		TanggalPelaporanTerbaru: tanggal,
+	}
+}
+
+func (u *usecase) GetPublicKomoditas(ctx context.Context, req *dto.ReqPublicGetKomoditas) dto.ResPublicKomoditasList {
+	name := req.Nama
+	if name == nil || *name == "" {
+		name = req.Name
+	}
+	filter := entity.PublicKomoditasListFilter{
+		Nama:             name,
+		IDPasar:          req.IDPasar,
+		IDTempatUsaha:    req.IDTempatUsaha,
+		PaginationFilter: u.publicKomoditasPagination(req),
+	}
+	rows, page, err := u.masterDataRepo.GetPublicKomoditasList(ctx, &filter)
+	if err != nil {
+		return dto.ResPublicKomoditasList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+	}
+	res := make([]dto.ResPublicKomoditas, 0, len(rows))
+	for _, row := range rows {
+		res = append(res, u.toResPublicKomoditas(row))
+	}
+	return dto.ResPublicKomoditasList{
+		BaseResPagination: dtobase.BaseResPagination{
+			BaseRes: u.baseRes(http.StatusOK, "Success", nil),
+			Page:    u.serializer.ToPage(page),
+		},
+		Data: res,
+	}
 }
 func (u *usecase) GetPublicKomoditasDetail(ctx context.Context, id uuid.UUID, req *dto.ReqPublicKomoditasDetail) dto.ResPublicKomoditasDetailEnvelope {
 	days := 30
@@ -118,17 +191,33 @@ func (u *usecase) GetPublicKomoditasTrend(ctx context.Context, id uuid.UUID, req
 	}
 	return dto.ResPublicTrendEnvelope{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Data: out}
 }
-func (u *usecase) GetPublicPasar(ctx context.Context, req *dto.ReqGetPasar) dto.ResPasarList {
-	filter := u.pasarFilter(req, true)
-	rows, page, err := u.masterDataRepo.GetPasarByFilter(ctx, &filter)
+func (u *usecase) toResPublicPasar(item entity.PublicPasarListItem) dto.ResPublicPasar {
+	alamat := ""
+	if item.Alamat != nil {
+		alamat = *item.Alamat
+	}
+	return dto.ResPublicPasar{
+		ID:               item.ID,
+		Nama:             item.Nama,
+		Alamat:           alamat,
+		IsActive:         item.Status,
+		Longitude:        item.Longitude,
+		Latitude:         item.Latitude,
+		TotalTempatUsaha: item.TotalTempatUsaha,
+		TotalKomoditas:   item.TotalKomoditas,
+	}
+}
+
+func (u *usecase) GetPublicPasar(ctx context.Context) dto.ResPublicPasarList {
+	rows, err := u.masterDataRepo.GetPublicPasarList(ctx)
 	if err != nil {
-		return dto.ResPasarList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+		return dto.ResPublicPasarList{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
-	res := make([]dto.ResPasar, 0, len(rows))
+	res := make([]dto.ResPublicPasar, 0, len(rows))
 	for _, row := range rows {
-		res = append(res, u.serializer.ToPasar(row))
+		res = append(res, u.toResPublicPasar(row))
 	}
-	return dto.ResPasarList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Page: u.serializer.ToPage(page)}, Data: res}
+	return dto.ResPublicPasarList{BaseRes: u.baseRes(http.StatusOK, "Success", nil), Data: res}
 }
 func (u *usecase) GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetTempatUsaha) dto.ResPublicPasarDetailEnvelope {
 	filter := u.tempatUsahaFilter(req, true)
@@ -142,8 +231,55 @@ func (u *usecase) GetPublicPasarDetail(ctx context.Context, id uuid.UUID, req *d
 	}
 	return dto.ResPublicPasarDetailEnvelope{BaseRes: u.baseRes(http.StatusOK, "ok", nil), Data: &dto.ResPublicPasarDetail{Pasar: u.serializer.ToPasar(*pasar), TempatUsaha: arr, Page: u.serializer.ToPage(page)}}
 }
-func (u *usecase) GetPublicTempatUsaha(ctx context.Context, req *dto.ReqGetTempatUsaha) dto.ResTempatUsahaList {
-	return u.GetTempatUsahaByFilter(ctx, req)
+func (u *usecase) publicTempatUsahaPagination(req *dto.ReqPublicGetTempatUsaha) entitybase.BasePaginationFilter {
+	limit := 10
+	if req.Limit != nil && *req.Limit > 0 {
+		limit = *req.Limit
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	page := 1
+	if req.Page != nil && *req.Page > 0 {
+		page = *req.Page
+	}
+	offset := (page - 1) * limit
+	return entitybase.BasePaginationFilter{
+		Offset: &offset,
+		Limit:  &limit,
+	}
+}
+
+func (u *usecase) GetPublicTempatUsaha(ctx context.Context, req *dto.ReqPublicGetTempatUsaha) dto.ResPublicTempatUsahaList {
+	name := req.Nama
+	if name == nil || *name == "" {
+		name = req.Name
+	}
+	filter := entity.PublicTempatUsahaListFilter{
+		Nama:             name,
+		IDPasar:          req.IDPasar,
+		PaginationFilter: u.publicTempatUsahaPagination(req),
+	}
+	rows, page, err := u.masterDataRepo.GetPublicTempatUsahaList(ctx, &filter)
+	if err != nil {
+		return dto.ResPublicTempatUsahaList{BaseResPagination: dtobase.BaseResPagination{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}}
+	}
+	res := make([]dto.ResPublicTempatUsaha, 0, len(rows))
+	for _, row := range rows {
+		res = append(res, dto.ResPublicTempatUsaha{
+			ID:        row.ID,
+			Nama:      row.Nama,
+			PasarID:   row.PasarID,
+			PasarNama: row.PasarNama,
+		})
+	}
+	return dto.ResPublicTempatUsahaList{
+		BaseResPagination: dtobase.BaseResPagination{
+			BaseRes: u.baseRes(http.StatusOK, "Success", nil),
+			Page:    u.serializer.ToPage(page),
+		},
+		Data: res,
+	}
 }
 func (u *usecase) GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, req *dto.ReqGetKomoditas) dto.ResPublicTempatUsahaDetailEnvelope {
 	filter := u.komoditasFilter(req)
@@ -157,6 +293,11 @@ func (u *usecase) GetPublicTempatUsahaDetail(ctx context.Context, id uuid.UUID, 
 		if v, ok := row["satuan"]; ok {
 			if val, ok2 := v.(*string); ok2 {
 				item.Satuan = val
+			}
+		}
+		if v, ok := row["gambar_url"]; ok {
+			if val, ok2 := v.(*string); ok2 {
+				item.GambarURL = val
 			}
 		}
 		if latestMap, ok := row["latest"].(map[string]any); ok {
@@ -176,7 +317,14 @@ func (u *usecase) CreatePasar(ctx context.Context, req *dto.ReqCreatePasar) dto.
 	if err := u.validator.Struct(req); err != nil {
 		return dto.ResPasarSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
-	obj, err := u.masterDataRepo.CreatePasar(ctx, &entity.Pasar{Nama: req.Nama, Alamat: req.Alamat, Status: constant.StatusActive})
+	pasar := &entity.Pasar{Nama: req.Nama, Alamat: req.Alamat, Status: constant.StatusActive}
+	if req.Longitude != nil {
+		pasar.Longitude = *req.Longitude
+	}
+	if req.Latitude != nil {
+		pasar.Latitude = *req.Latitude
+	}
+	obj, err := u.masterDataRepo.CreatePasar(ctx, pasar)
 	if err != nil {
 		return dto.ResPasarSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
@@ -210,6 +358,12 @@ func (u *usecase) UpdatePasar(ctx context.Context, id uuid.UUID, req *dto.ReqUpd
 	}
 	if req.Alamat != nil {
 		update["alamat"] = req.Alamat
+	}
+	if req.Longitude != nil {
+		update["longitude"] = *req.Longitude
+	}
+	if req.Latitude != nil {
+		update["latitude"] = *req.Latitude
 	}
 	if req.Status != nil {
 		update["status"] = *req.Status
@@ -276,6 +430,40 @@ func (u *usecase) UpdateKomoditas(ctx context.Context, id uuid.UUID, req *dto.Re
 	return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusOK, "updated", nil), Data: &res}
 }
 
+const maxKomoditasImageSize = 2 * 1024 * 1024 // 2MB
+
+func (u *usecase) UploadKomoditasGambar(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResKomoditasSingle {
+	if u.storage == nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusServiceUnavailable, "storage not configured", errors.New("storage not configured"))}
+	}
+	if size <= 0 || size > maxKomoditasImageSize {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusBadRequest, "file size must be between 1 byte and 2MB", errors.New("invalid file size"))}
+	}
+
+	existing, err := u.masterDataRepo.GetKomoditasByID(ctx, id)
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusNotFound, "komoditas not found", err)}
+	}
+
+	publicURL, err := u.storage.UploadKomoditasImage(ctx, id, reader, size, contentType)
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
+	}
+
+	if existing.GambarURL != nil && *existing.GambarURL != "" {
+		oldKey := miniostorage.ObjectKeyFromURL(*existing.GambarURL, u.cfg.MinIO.PublicURL)
+		_ = u.storage.DeleteKomoditasImage(ctx, oldKey)
+	}
+
+	obj, err := u.masterDataRepo.UpdateKomoditas(ctx, id, map[string]any{"gambar_url": publicURL})
+	if err != nil {
+		return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
+	}
+
+	res := u.serializer.ToKomoditas(*obj)
+	return dto.ResKomoditasSingle{BaseRes: u.baseRes(http.StatusOK, "uploaded", nil), Data: &res}
+}
+
 func (u *usecase) CreateTempatUsaha(ctx context.Context, req *dto.ReqCreateTempatUsaha) dto.ResTempatUsahaSingle {
 	if err := u.validator.Struct(req); err != nil {
 		return dto.ResTempatUsahaSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
@@ -337,11 +525,49 @@ func (u *usecase) DeleteTempatUsaha(ctx context.Context, id uuid.UUID) dtobase.B
 	return u.baseRes(http.StatusOK, "deleted", nil)
 }
 
+func komoditasDijualFromCreateReq(req *dto.ReqCreateKomoditasDijual) entity.KomoditasDijual {
+	satuanStok := req.SatuanStok
+	if satuanStok == "" {
+		satuanStok = "kg"
+	}
+	satuanPeriode := req.SatuanPeriode
+	if satuanPeriode == "" {
+		satuanPeriode = "minggu"
+	}
+	nilaiPeriode := req.NilaiPeriode
+	if nilaiPeriode <= 0 {
+		nilaiPeriode = 1
+	}
+	var standardized float64
+	if req.StandardizedStockPeriode != nil {
+		standardized = *req.StandardizedStockPeriode
+	}
+	status := constant.StatusActive
+	if req.Status != nil {
+		status = constant.ActiveInactiveStatus(*req.Status)
+	}
+	return entity.KomoditasDijual{
+		IDTempatUsaha:            req.IDTempatUsaha,
+		IDKomoditas:              req.IDKomoditas,
+		HargaNormal:              req.HargaNormal,
+		HargaMahal:               req.HargaMahal,
+		SatuanStok:               satuanStok,
+		NilaiStok:                req.NilaiStok,
+		SatuanPeriode:            satuanPeriode,
+		NilaiPeriode:             nilaiPeriode,
+		LokasiSupplier:           req.LokasiSupplier,
+		PolaDistribusi:           req.PolaDistribusi,
+		StandardizedStockPeriode: standardized,
+		Status:                   status,
+	}
+}
+
 func (u *usecase) CreateKomoditasDijual(ctx context.Context, req *dto.ReqCreateKomoditasDijual) dto.ResKomoditasDijualSingle {
 	if err := u.validator.Struct(req); err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
-	obj, err := u.masterDataRepo.CreateKomoditasDijual(ctx, &entity.KomoditasDijual{IDTempatUsaha: req.IDTempatUsaha, IDKomoditas: req.IDKomoditas, Status: constant.StatusActive})
+	input := komoditasDijualFromCreateReq(req)
+	obj, err := u.masterDataRepo.CreateKomoditasDijual(ctx, &input)
 	if err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
 	}
@@ -377,10 +603,47 @@ func (u *usecase) GetKomoditasDijualByFilter(ctx context.Context, req *dto.ReqGe
 }
 
 func (u *usecase) UpdateKomoditasDijual(ctx context.Context, id uuid.UUID, req *dto.ReqUpdateKomoditasDijual) dto.ResKomoditasDijualSingle {
+	_, err := u.masterDataRepo.GetKomoditasDijualByID(ctx, id)
+	if err != nil {
+		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusNotFound, "not found", err)}
+	}
+
 	update := map[string]any{}
+	if req.HargaNormal != nil {
+		update["harga_normal"] = *req.HargaNormal
+	}
+	if req.HargaMahal != nil {
+		update["harga_mahal"] = *req.HargaMahal
+	}
+	if req.SatuanStok != nil {
+		update["satuan_stok"] = *req.SatuanStok
+	}
+	if req.NilaiStok != nil {
+		update["nilai_stok"] = *req.NilaiStok
+	}
+	if req.SatuanPeriode != nil {
+		update["satuan_periode"] = *req.SatuanPeriode
+	}
+	if req.NilaiPeriode != nil {
+		update["nilai_periode"] = *req.NilaiPeriode
+	}
+	if req.LokasiSupplier != nil {
+		update["lokasi_supplier"] = *req.LokasiSupplier
+	}
+	if req.PolaDistribusi != nil {
+		update["pola_distribusi"] = req.PolaDistribusi
+	}
+	if req.KelasKomoditas != nil {
+		update["kelas_komoditas"] = req.KelasKomoditas
+	}
 	if req.Status != nil {
 		update["status"] = *req.Status
 	}
+
+	if req.StandardizedStockPeriode != nil {
+		update["standardized_stock_periode"] = *req.StandardizedStockPeriode
+	}
+
 	obj, err := u.masterDataRepo.UpdateKomoditasDijual(ctx, id, update)
 	if err != nil {
 		return dto.ResKomoditasDijualSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
@@ -480,6 +743,68 @@ func (u *usecase) FinalizePengumpulanData(ctx context.Context, id uuid.UUID) dto
 		return dto.ResFinalizePengumpulanDataEnvelope{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
 	}
 	return dto.ResFinalizePengumpulanDataEnvelope{BaseRes: u.baseRes(http.StatusOK, "finalized", nil), Data: &dto.ResFinalizePengumpulanData{FinalizedKomoditasCount: count}}
+}
+
+type pengumpulanCatatanMeta struct {
+	Enumerator   string `json:"enumerator"`
+	SignatureURL string `json:"signature_url,omitempty"`
+}
+
+func parsePengumpulanCatatan(catatan *string) pengumpulanCatatanMeta {
+	if catatan == nil || strings.TrimSpace(*catatan) == "" {
+		return pengumpulanCatatanMeta{}
+	}
+	var meta pengumpulanCatatanMeta
+	if err := json.Unmarshal([]byte(*catatan), &meta); err == nil && meta.Enumerator != "" {
+		return meta
+	}
+	return pengumpulanCatatanMeta{Enumerator: strings.TrimSpace(*catatan)}
+}
+
+func encodePengumpulanCatatan(meta pengumpulanCatatanMeta) string {
+	b, _ := json.Marshal(meta)
+	return string(b)
+}
+
+const maxSignatureSize = 512 * 1024 // 512KB
+
+func (u *usecase) UploadPengumpulanTandaTangan(ctx context.Context, id uuid.UUID, reader io.Reader, size int64, contentType string) dto.ResPengumpulanDataSingle {
+	if u.storage == nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusServiceUnavailable, "storage not configured", errors.New("storage not configured"))}
+	}
+	if size <= 0 || size > maxSignatureSize {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, "file size must be between 1 byte and 512KB", errors.New("invalid file size"))}
+	}
+
+	existing, err := u.transactionDataRepo.GetPengumpulanDataByID(ctx, id)
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusNotFound, "not found", err)}
+	}
+	if existing.Status != constant.PengumpulanDataDraft {
+		e := errors.New("only draft can be updated")
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, e.Error(), e)}
+	}
+
+	meta := parsePengumpulanCatatan(existing.Catatan)
+	publicURL, err := u.storage.UploadPengumpulanSignature(ctx, id, reader, size, contentType)
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusBadRequest, err.Error(), err)}
+	}
+
+	if meta.SignatureURL != "" {
+		oldKey := miniostorage.ObjectKeyFromURL(meta.SignatureURL, u.cfg.MinIO.PublicURL)
+		_ = u.storage.DeletePengumpulanSignature(ctx, oldKey)
+	}
+
+	meta.SignatureURL = publicURL
+	catatan := encodePengumpulanCatatan(meta)
+	obj, err := u.transactionDataRepo.UpdatePengumpulanData(ctx, id, map[string]any{"catatan": catatan})
+	if err != nil {
+		return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusInternalServerError, err.Error(), err)}
+	}
+
+	res := u.serializer.ToPengumpulanData(*obj)
+	return dto.ResPengumpulanDataSingle{BaseRes: u.baseRes(http.StatusOK, "uploaded", nil), Data: &res}
 }
 
 func (u *usecase) ensureHargaRutinDraft(ctx context.Context, idPengumpulanData uuid.UUID) error {

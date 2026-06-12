@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	sihpusecase "github.com/thdoikn/sihp-be/internal/usecase/sihp"
@@ -32,17 +35,15 @@ func (h *sihpHandler) PublicOverview(c *fiber.Ctx) error {
 // @Description Get public komoditas list
 // @Tags Public
 // @Produce json
-// @Param name query string false "Komoditas name"
+// @Param nama query string false "Komoditas name"
 // @Param id_tempat_usaha query string false "Tempat usaha ID"
 // @Param id_pasar query string false "Pasar ID"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
+// @Param page query int false "Page number"
 // @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResKomoditasList
+// @Success 200 {object} dto.ResPublicKomoditasList
 // @Router /public/komoditas [get]
 func (h *sihpHandler) PublicKomoditas(c *fiber.Ctx) error {
-	var req dto.ReqGetKomoditas
+	var req dto.ReqPublicGetKomoditas
 	_ = c.QueryParser(&req)
 	res := h.usecase.GetPublicKomoditas(c.Context(), &req)
 	return c.Status(res.Code).JSON(res)
@@ -84,21 +85,13 @@ func (h *sihpHandler) PublicKomoditasTrend(c *fiber.Ctx) error {
 
 // PublicPasar godoc
 // @Summary Public pasar list
-// @Description Get public pasar list
+// @Description Get public active pasar list with stats
 // @Tags Public
 // @Produce json
-// @Param name query string false "Pasar name"
-// @Param status query int false "Pasar status"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
-// @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResPasarList
+// @Success 200 {object} dto.ResPublicPasarList
 // @Router /public/pasar [get]
 func (h *sihpHandler) PublicPasar(c *fiber.Ctx) error {
-	var req dto.ReqGetPasar
-	_ = c.QueryParser(&req)
-	res := h.usecase.GetPublicPasar(c.Context(), &req)
+	res := h.usecase.GetPublicPasar(c.Context())
 	return c.Status(res.Code).JSON(res)
 }
 
@@ -125,20 +118,17 @@ func (h *sihpHandler) PublicPasarDetail(c *fiber.Ctx) error {
 
 // PublicTempatUsaha godoc
 // @Summary Public tempat usaha list
-// @Description Get public tempat usaha list
+// @Description Get public active tempat usaha list
 // @Tags Public
 // @Produce json
-// @Param name query string false "Tempat usaha name"
+// @Param nama query string false "Tempat usaha name"
 // @Param id_pasar query string false "Pasar ID"
-// @Param status query int false "Tempat usaha status"
-// @Param show-count query bool false "Show count"
-// @Param offset query int false "Offset"
+// @Param page query int false "Page number"
 // @Param limit query int false "Limit"
-// @Param order-by query string false "Order by"
-// @Success 200 {object} dto.ResTempatUsahaList
+// @Success 200 {object} dto.ResPublicTempatUsahaList
 // @Router /public/tempat-usaha [get]
 func (h *sihpHandler) PublicTempatUsaha(c *fiber.Ctx) error {
-	var req dto.ReqGetTempatUsaha
+	var req dto.ReqPublicGetTempatUsaha
 	_ = c.QueryParser(&req)
 	res := h.usecase.GetPublicTempatUsaha(c.Context(), &req)
 	return c.Status(res.Code).JSON(res)
@@ -316,6 +306,52 @@ func (h *sihpHandler) UpdateKomoditas(c *fiber.Ctx) error {
 	var req dto.ReqUpdateKomoditas
 	_ = c.BodyParser(&req)
 	res := h.usecase.UpdateKomoditas(c.Context(), parseUUIDParam(c), &req)
+	return c.Status(res.Code).JSON(res)
+}
+
+// UploadKomoditasGambar godoc
+// @Summary Upload komoditas image
+// @Description Upload komoditas image to MinIO and save public URL
+// @Tags Komoditas
+// @Security Authorization
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path string true "Komoditas ID"
+// @Param gambar formData file true "Komoditas image (jpeg/png/webp, max 2MB)"
+// @Success 200 {object} dto.ResKomoditasSingle
+// @Router /admin/komoditas/{id}/gambar [post]
+func (h *sihpHandler) UploadKomoditasGambar(c *fiber.Ctx) error {
+	file, err := c.FormFile("gambar")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "field gambar is required",
+		})
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "failed to read uploaded file",
+		})
+	}
+	defer f.Close()
+
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		switch strings.ToLower(filepath.Ext(file.Filename)) {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".webp":
+			contentType = "image/webp"
+		}
+	}
+	res := h.usecase.UploadKomoditasGambar(c.Context(), parseUUIDParam(c), f, file.Size, contentType)
 	return c.Status(res.Code).JSON(res)
 }
 
@@ -586,6 +622,52 @@ func (h *sihpHandler) DeletePengumpulanData(c *fiber.Ctx) error {
 // @Router /admin/pengumpulan-data/{id}/finalize [post]
 func (h *sihpHandler) FinalizePengumpulanData(c *fiber.Ctx) error {
 	res := h.usecase.FinalizePengumpulanData(c.Context(), parseUUIDParam(c))
+	return c.Status(res.Code).JSON(res)
+}
+
+// UploadPengumpulanTandaTangan godoc
+// @Summary Upload pengumpulan signature
+// @Description Upload enumerator signature image to MinIO and save URL in catatan
+// @Tags Pengumpulan Data
+// @Security Authorization
+// @Accept multipart/form-data
+// @Produce json
+// @Param id path string true "Pengumpulan data ID"
+// @Param tanda_tangan formData file true "Signature image (jpeg/png/webp, max 512KB)"
+// @Success 200 {object} dto.ResPengumpulanDataSingle
+// @Router /admin/pengumpulan-data/{id}/tanda-tangan [post]
+func (h *sihpHandler) UploadPengumpulanTandaTangan(c *fiber.Ctx) error {
+	file, err := c.FormFile("tanda_tangan")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "field tanda_tangan is required",
+		})
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"code":    fiber.StatusBadRequest,
+			"message": "failed to read uploaded file",
+		})
+	}
+	defer f.Close()
+
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		switch strings.ToLower(filepath.Ext(file.Filename)) {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".webp":
+			contentType = "image/webp"
+		}
+	}
+	res := h.usecase.UploadPengumpulanTandaTangan(c.Context(), parseUUIDParam(c), f, file.Size, contentType)
 	return c.Status(res.Code).JSON(res)
 }
 
